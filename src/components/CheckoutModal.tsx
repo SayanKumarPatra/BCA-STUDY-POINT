@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   X,
   Copy,
   Check,
   CheckCircle2,
   Phone,
-  ArrowRight,
   ArrowLeft,
   ShieldCheck,
   Upload,
   MessageSquare,
   UserPlus,
   Download,
-  QrCode,
+  Lock,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,7 @@ interface CheckoutModalProps {
   onRemoveProduct: (productId: string) => void;
   onOpenAuth?: (isRegister: boolean) => void;
   onPurchaseSuccess: (orderId: string) => void;
+  onConfirmedExit?: (orderId: string) => void;
   isPage?: boolean;
 }
 
@@ -41,6 +42,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   siteSettings,
   onOpenAuth,
   onPurchaseSuccess,
+  onConfirmedExit,
   isPage = false,
 }) => {
   const { student, loginStudent } = useAuth();
@@ -53,21 +55,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState('');
   const [isUploadingScreenshot, setIsUploadingScreenshot] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
-  const [copiedAmount, setCopiedAmount] = useState(false);
   const [qrDownloaded, setQrDownloaded] = useState(false);
+  const [dynamicQrUrl, setDynamicQrUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [generatedOrderId, setGeneratedOrderId] = useState(
     () => `BCA-${Date.now().toString().slice(-6)}`
   );
-
-  useEffect(() => {
-    if (step !== 'confirmed') {
-      setStep(student ? 'payment' : 'auth_required');
-    }
-  }, [student?.id, step]);
-
-  if (!isOpen) return null;
 
   const packagePricing = calculatePackagePrice(
     selectedProducts.map((p) => p.id),
@@ -88,6 +82,51 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     BRAND.payment?.whatsappPhone ||
     '8145775413';
 
+  const isDefaultBharatPe = OFFICIAL_UPI_ID === 'BHARATPE2D0I0H4R5P81095@unitype';
+  const upiPayeeName = isDefaultBharatPe ? 'Sayan Kumar Patra' : 'BCA Study Point';
+  const upiNote = 'BCA Study Point';
+  const fixedAmountStr = Number(totalPayable || 0).toFixed(2);
+  const lockedQrPaymentUri = `upi://pay?pa=${encodeURIComponent(
+    OFFICIAL_UPI_ID
+  )}&pn=${encodeURIComponent(upiPayeeName)}&am=${fixedAmountStr}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
+
+  useEffect(() => {
+    if (step !== 'confirmed') {
+      setStep(student ? 'payment' : 'auth_required');
+    }
+  }, [student?.id, step]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isOpen || !totalPayable || totalPayable <= 0) {
+      setDynamicQrUrl('');
+      return;
+    }
+    QRCode.toDataURL(lockedQrPaymentUri, {
+      width: 520,
+      margin: 2,
+      errorCorrectionLevel: 'H',
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
+    })
+      .then((url) => {
+        if (!cancelled) setDynamicQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDynamicQrUrl('');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, lockedQrPaymentUri, totalPayable]);
+
+  if (!isOpen) return null;
+
+  const activeQrSrc = dynamicQrUrl || OFFICIAL_QR_CODE;
+
   const handleCopyUpi = () => {
     try {
       navigator.clipboard.writeText(OFFICIAL_UPI_ID);
@@ -98,25 +137,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const handleCopyAmount = () => {
-    try {
-      navigator.clipboard.writeText(String(totalPayable));
-      setCopiedAmount(true);
-      setTimeout(() => setCopiedAmount(false), 2500);
-    } catch {
-      // fallback
-    }
-  };
-
   const handleDownloadQr = async () => {
-    const fileName = `BCA-Study-Point-QR-Rs${totalPayable}.png`;
+    const fileName = `BCA-Study-Point-Pay-Rs${totalPayable}.png`;
     try {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
         img.onerror = () => reject(new Error('Image load failed'));
-        img.src = OFFICIAL_QR_CODE;
+        img.src = activeQrSrc;
       });
 
       const canvas = document.createElement('canvas');
@@ -133,14 +162,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.fillStyle = '#52000B';
+      ctx.fillStyle = '#5F259F';
       ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('BCA STUDY POINT', canvas.width / 2, 46);
 
       ctx.fillStyle = '#111827';
       ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
-      ctx.fillText(`Scan & Pay ₹${totalPayable}`, canvas.width / 2, 80);
+      ctx.fillText(`Fixed Amount: ₹${totalPayable} (Non-Editable)`, canvas.width / 2, 80);
 
       ctx.drawImage(img, pad, headerHeight + 10, qrSize, qrSize);
 
@@ -160,7 +189,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setTimeout(() => setQrDownloaded(false), 3500);
     } catch {
       const link = document.createElement('a');
-      link.href = OFFICIAL_QR_CODE;
+      link.href = activeQrSrc;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
@@ -292,14 +321,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     `Hello BCA STUDY POINT,\nI have paid ₹${totalPayable} for Order: ${generatedOrderId}\nStudent: ${activeName} (${activeMobile})\n\nPlease find my payment screenshot below to verify and activate my question banks.`
   )}`;
 
-  const isDefaultBharatPe = OFFICIAL_UPI_ID === 'BHARATPE2D0I0H4R5P81095@unitype';
-  const upiPayeeName = isDefaultBharatPe ? 'Sayan Kumar Patra' : 'BCA Study Point';
-  const upiNote = isDefaultBharatPe ? 'Pay To Sayan Kumar Patra' : 'BCA Study Point';
-  // Match exact official QR payload (correct beneficiary name & no unsigned am= trigger that causes NPCI browser risk blocks)
-  const upiDeepLink = `upi://pay?pa=${encodeURIComponent(
-    OFFICIAL_UPI_ID
-  )}&pn=${encodeURIComponent(upiPayeeName)}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
-
   return (
     <div
       className={
@@ -311,7 +332,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       {isPage && (
         <div className="w-full max-w-md mb-3">
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (step === 'confirmed' && onConfirmedExit) {
+                onConfirmedExit(generatedOrderId);
+              } else {
+                onClose();
+              }
+            }}
             className="inline-flex items-center gap-1.5 text-xs text-[#FFE7A3] hover:text-white px-3.5 py-1.5 rounded-full bg-black/50 border border-[#FFE7A3]/30 transition-all cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -320,34 +347,40 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         </div>
       )}
 
-      {/* 2026 Liquid Glass Modal */}
-      <div className="liquid-glass-master rounded-2xl sm:rounded-3xl max-w-md w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 border border-[#FFE7A3]/30 shadow-2xl relative text-left my-auto text-white">
+      {/* 2026 Liquid Glass Modal — Compact Single-Screen Fit */}
+      <div className="liquid-glass-master rounded-2xl sm:rounded-3xl max-w-md w-full max-h-[94vh] overflow-y-auto p-3.5 sm:p-4 border border-[#FFE7A3]/30 shadow-2xl relative text-left my-auto text-white">
         {!isPage && (
           <button
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            onClick={() => {
+              if (step === 'confirmed' && onConfirmedExit) {
+                onConfirmedExit(generatedOrderId);
+              } else {
+                onClose();
+              }
+            }}
+            className="absolute top-3 right-3 p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         )}
 
-        {/* Modal Header */}
-        <div className="flex items-center gap-2.5 mb-3 pb-2.5 border-b border-white/15">
+        {/* Compact Modal Header */}
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/15">
           <img
             src={BRAND.logoUrl}
             alt="Logo"
-            className="w-10 h-10 rounded-full object-cover ring-2 ring-[#FFD34E]/60 shadow-xs"
+            className="w-8 h-8 rounded-full object-cover ring-2 ring-[#FFD34E]/60 shadow-xs"
           />
           <div>
-            <h2 className="text-base sm:text-lg font-black text-white leading-tight">
+            <h2 className="text-sm sm:text-base font-black text-white leading-tight">
               {step === 'confirmed'
                 ? 'Order Placed Successfully!'
                 : step === 'payment'
-                ? 'Direct UPI Payment'
+                ? 'UPI QR Payment'
                 : 'Registration Required'}
             </h2>
-            <p className="text-[11px] text-[#FFE7A3]">
-              {selectedProducts.length} Subject(s) · Total: ₹{totalPayable}
+            <p className="text-[10.5px] text-[#FFE7A3]">
+              {selectedProducts.length} Subject(s) · Fixed Total: ₹{totalPayable}
             </p>
           </div>
         </div>
@@ -387,17 +420,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: Direct Payment (Student already registered/logged in) */}
+        {/* STEP 2: Single-Screen Compact PhonePe-Themed Fixed-Amount Payment */}
         {step === 'payment' && (
-          <form onSubmit={handleConfirmPaymentSubmission} className="space-y-3">
+          <form onSubmit={handleConfirmPaymentSubmission} className="space-y-2">
             {errorMessage && (
-              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-200">
+              <div className="p-2 bg-rose-950/80 border border-rose-500/50 rounded-xl text-[11px] text-rose-200">
                 {errorMessage}
               </div>
             )}
 
-            {/* Compact Verified Student Strip */}
-            <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-emerald-400/35 flex items-center justify-between gap-2 text-[11px]">
+            {/* Ultra-Compact Verified Student Strip */}
+            <div className="px-2.5 py-1 rounded-lg bg-black/40 border border-emerald-400/35 flex items-center justify-between gap-2 text-[10.5px]">
               <span className="text-emerald-200 font-semibold truncate">
                 ✓ {activeName} · {activeMobile || activeEmail}
               </span>
@@ -406,119 +439,81 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </span>
             </div>
 
-            {/* Safe Zero-Risk Direct UPI Payment Card (Large Scannable QR + Download QR + Copy UPI ID) */}
-            <div className="bg-gradient-to-b from-[#4B000B]/95 via-[#240005]/95 to-black/90 p-3.5 rounded-2xl border border-[#FFD34E]/45 shadow-xl space-y-3">
-              {/* Top Row: Total Amount + Verified Brand */}
-              <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-[#FFE7A3]/80 font-bold">Payable:</span>
-                  <span className="text-2xl font-black text-[#FFD34E] tabular-nums leading-none">
+            {/* PhonePe Purple Theme Compact Fixed-Amount QR Card (Fits One Screen) */}
+            <div className="bg-gradient-to-br from-[#5F259F] via-[#4A1A82] to-[#2F0D57] p-2.5 sm:p-3 rounded-2xl border border-[#C4B5FD]/40 shadow-xl space-y-2">
+              {/* Top Row: Fixed Amount + PhonePe-Style Verified Badge */}
+              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-white/15">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10.5px] text-purple-100/85 font-bold">Pay Fixed:</span>
+                  <span className="text-xl font-black text-white tabular-nums leading-none">
                     ₹{totalPayable}
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleCopyAmount}
-                    className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-[10px] font-bold text-[#FFE7A3] inline-flex items-center gap-1 cursor-pointer"
-                    title="Copy Amount"
-                  >
-                    {copiedAmount ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
-                    <span>{copiedAmount ? 'Copied' : 'Copy'}</span>
-                  </button>
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-300/40">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Fixed</span>
+                  </span>
                 </div>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-[#FFD34E]/15 text-[#FFE7A3] border border-[#FFD34E]/40">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-white/15 text-white border border-white/25">
+                  <ShieldCheck className="w-3 h-3 text-emerald-300 shrink-0" />
                   <span>BCA Study Point</span>
                 </span>
               </div>
 
-              {/* Primary Direct UPI App Chooser CTA (opens bottom sheet with all UPI apps & bank options) */}
-              <div className="space-y-1.5">
-                <a
-                  href={upiDeepLink}
-                  className="group flex items-center justify-between gap-3 w-full px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#5F259F] via-[#6B2FB3] to-[#511D8B] hover:brightness-110 active:scale-[0.99] text-white border border-white/25 shadow-[0_6px_22px_rgba(95,37,159,0.5)] transition-all"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-white text-[#5F259F] flex items-center justify-center shrink-0 font-black text-base shadow-sm">
-                      ₹
-                    </div>
-                    <div className="text-left min-w-0">
-                      <div className="text-sm font-black tracking-tight leading-tight">
-                        Pay ₹{totalPayable} Now
-                      </div>
-                      <div className="text-[10px] font-semibold text-white/85 truncate">
-                        PhonePe · GPay · Paytm · All UPI Apps
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-2.5 py-1 rounded-lg bg-white/15 group-hover:bg-white/25 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors">
-                    <span>Pay</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </a>
-                <p className="text-[10px] text-[#FFE7A3]/90 text-center leading-snug">
-                  বাটনে ক্লিক করলে নিচ থেকে সব UPI অ্যাপ আসবে—যেকোনো অ্যাপ সিলেক্ট করে <strong>₹{totalPayable}</strong> বসিয়ে পেমেন্ট করুন।
-                </p>
-              </div>
-
-              {/* Compact Backup: Scan / Save QR & Copy UPI ID */}
-              <div className="pt-2.5 border-t border-white/10 flex items-center gap-3">
-                <div className="w-20 h-20 bg-white p-1.5 rounded-xl shrink-0 shadow ring-1 ring-[#FFD34E]/50">
+              {/* Side-by-Side QR Scanner + Download & Copy Controls (Saves Vertical Height) */}
+              <div className="flex items-center gap-2.5 bg-black/25 p-2 rounded-xl border border-white/15">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 bg-white p-1.5 rounded-xl shrink-0 shadow-lg ring-2 ring-white/80">
                   <img
-                    src={OFFICIAL_QR_CODE}
-                    alt="Scan Official UPI QR Code"
+                    src={activeQrSrc}
+                    alt={`Scan UPI QR to Pay Fixed ₹${totalPayable}`}
                     className="w-full h-full object-contain"
                   />
                 </div>
+
                 <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-white/80">
-                      <QrCode className="w-3 h-3 text-[#FFD34E]" />
-                      <span>QR / Copy UPI Backup</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleDownloadQr}
-                      className="px-2 py-0.5 rounded-md bg-[#FFD34E] hover:bg-[#FFE7A3] text-[#3D0009] text-[10px] font-black inline-flex items-center gap-1 cursor-pointer"
-                    >
-                      {qrDownloaded ? <Check className="w-2.5 h-2.5" /> : <Download className="w-2.5 h-2.5" />}
-                      <span>{qrDownloaded ? 'Saved' : 'Save QR'}</span>
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between gap-1.5 bg-black/55 px-2 py-1 rounded-lg border border-white/15">
-                    <code className="text-[10px] font-mono font-bold text-[#FFD34E] truncate select-all">
+                  <p className="text-[10.5px] font-bold text-purple-100 leading-tight">
+                    স্ক্যান করলেই <span className="text-[#FFD34E]">₹{totalPayable} ফিক্সড</span> দেখাবে (এডিট হবে না)
+                  </p>
+                  <p className="text-[9.5px] text-purple-200/80 leading-tight">
+                    PhonePe / GPay / Paytm দিয়ে স্ক্যান বা Gallery থেকে পেমেন্ট করুন।
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadQr}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white hover:bg-purple-50 active:scale-[0.99] text-[#5F259F] text-[11px] font-black shadow-md cursor-pointer transition-all"
+                  >
+                    {qrDownloaded ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Download className="w-3.5 h-3.5" />}
+                    <span>{qrDownloaded ? 'QR Saved!' : `Download QR (₹${totalPayable})`}</span>
+                  </button>
+
+                  <div className="flex items-center justify-between gap-1 bg-black/40 px-2 py-1 rounded-lg border border-white/15">
+                    <code className="text-[9.5px] font-mono font-bold text-purple-100 truncate select-all">
                       {OFFICIAL_UPI_ID}
                     </code>
                     <button
                       type="button"
                       onClick={handleCopyUpi}
-                      className="px-2 py-0.5 bg-white/15 hover:bg-white/25 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                      className="px-1.5 py-0.5 bg-white/15 hover:bg-white/25 text-white rounded text-[9.5px] font-bold flex items-center gap-0.5 shrink-0 cursor-pointer"
                     >
-                      {copiedUpi ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedUpi ? <Check className="w-2.5 h-2.5 text-emerald-300" /> : <Copy className="w-2.5 h-2.5" />}
                       <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <p className="text-[9.5px] text-white/60 leading-tight">
-                    অথবা QR সেভ করে Gallery থেকে স্ক্যান / UPI ID কপি করে পেমেন্ট করুন।
-                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Compact Screenshot Upload / WhatsApp Verification */}
-            <div className="bg-black/40 p-2.5 rounded-xl border border-[#FFE7A3]/25 space-y-2">
-              <p className="text-[10px] text-white/80 leading-snug">
-                <strong className="text-[#FFE7A3]">স্ক্রিনশট ভেরিফিকেশন:</strong> পেমেন্ট শেষে নিচে স্ক্রিনশট দিন অথবা WhatsApp (<strong>{WHATSAPP_PHONE}</strong>)-এ পাঠান।
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-white cursor-pointer">
-                  <Upload className="w-3.5 h-3.5 text-[#FFD34E]" />
-                  <span>
+            {/* Compact Single-Row Screenshot Upload + WhatsApp Verification */}
+            <div className="bg-black/40 p-2 rounded-xl border border-[#FFE7A3]/20 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-white cursor-pointer truncate">
+                  <Upload className="w-3 h-3 text-[#FFD34E] shrink-0" />
+                  <span className="truncate">
                     {isUploadingScreenshot
                       ? 'Uploading...'
                       : paymentScreenshotUrl
-                      ? 'Change Screenshot'
-                      : 'Upload Screenshot (Optional)'}
+                      ? 'Screenshot Ready ✓'
+                      : 'Upload Screenshot'}
                   </span>
                   <input
                     type="file"
@@ -535,19 +530,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#25D366]/20 hover:bg-[#25D366]/30 border border-[#25D366]/40 text-[#25D366]"
+                  className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold bg-[#25D366]/20 hover:bg-[#25D366]/30 border border-[#25D366]/40 text-[#25D366] shrink-0"
                 >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>WhatsApp ({WHATSAPP_PHONE})</span>
+                  <MessageSquare className="w-3 h-3" />
+                  <span>WhatsApp</span>
                 </a>
               </div>
 
               {paymentScreenshotUrl && (
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex items-center gap-2 pt-0.5">
                   <img
                     src={paymentScreenshotUrl}
                     alt="Uploaded Payment Screenshot"
-                    className="w-12 h-12 rounded-lg object-cover border border-[#FFD34E]/50"
+                    className="w-9 h-9 rounded-md object-cover border border-[#FFD34E]/50"
                   />
                   <span className="text-[10px] text-emerald-300 font-semibold">
                     ✓ Screenshot attached to order
@@ -556,8 +551,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 pt-1">
+            {/* Bottom Actions */}
+            <div className="flex gap-2 pt-0.5">
               <button
                 type="button"
                 onClick={onClose}
@@ -608,7 +603,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 type="button"
                 onClick={() => {
                   onPurchaseSuccess(generatedOrderId);
-                  onClose();
+                  if (!isPage) {
+                    onClose();
+                  }
                 }}
                 className="btn-gold-primary w-full py-2.5 rounded-full text-xs font-black cursor-pointer shadow-md"
               >

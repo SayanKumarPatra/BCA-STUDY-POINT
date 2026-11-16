@@ -371,6 +371,7 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
       {/* 3. SINGLE-ROW COMPACT TAB SWITCHER */}
       <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/15">
         <button
+          data-tour="notes-tab"
           onClick={() => setActiveTab('notes')}
           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
             activeTab === 'notes'
@@ -385,6 +386,7 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
         </button>
 
         <button
+          data-tour="receipts-tab"
           onClick={() => setActiveTab('payments')}
           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer relative ${
             activeTab === 'payments'

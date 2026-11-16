@@ -9,7 +9,6 @@ import {
   Lock,
   X,
   TrendingDown,
-  Info,
   UserPlus,
 } from 'lucide-react';
 import type { Product, EffectivePackagePricing, SiteSettings } from '../types';
@@ -104,213 +103,79 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
   return (
     <section
       id="packages-pricing"
-      className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 my-3 sm:my-6 relative select-none pb-20 lg:pb-6"
+      className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 mt-1.5 mb-2 sm:my-5 relative select-none"
       aria-label="Package Selection & Pricing Section"
     >
       <div id="subjects" className="absolute -top-16 left-0 pointer-events-none" />
 
-      {/* 2026 Liquid Glass Master Container */}
-      <div className="liquid-glass-master rounded-2xl sm:rounded-3xl p-3 sm:p-5 border border-[#FFE7A3]/30 shadow-2xl relative overflow-hidden text-white">
-        {/* Specular Rim Glow */}
+      {/* Compact Liquid Glass Master Container */}
+      <div className="liquid-glass-master rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 border border-[#FFE7A3]/30 shadow-2xl relative overflow-hidden text-white">
         <div className="absolute inset-x-8 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#FFD34E]/60 to-transparent pointer-events-none" />
 
-        {/* Compact Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 mb-3 sm:mb-4 border-b border-[#FFE7A3]/20">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFD34E]/15 border border-[#FFD34E]/40 text-[#FFE7A3] text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">
-              <Sparkles className="w-3 h-3 text-[#FFD34E] animate-pulse" />
-              <span>{siteSettings?.homepage?.sectionBadge || 'BCA 3rd Semester · Solved Question Banks'}</span>
-            </div>
-            <h2 className="text-base sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-              <span>{siteSettings?.homepage?.sectionTitle || 'Package Selection & Pricing'}</span>
-              <span className="hidden sm:inline-block text-[#FFD34E] text-[11px] font-bold px-2 py-0.5 rounded-full bg-black/40 border border-[#FFD34E]/30">
-                {siteSettings?.homepage?.editionLabel || '2024-2025 Edition'}
-              </span>
+        {/* Single-Row Compact Header */}
+        <div className="flex items-center justify-between gap-2 pb-2 mb-2.5 sm:mb-3 border-b border-[#FFE7A3]/20">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-2xl font-black text-white tracking-tight truncate">
+              {siteSettings?.homepage?.sectionTitle || 'Package Selection & Pricing'}
             </h2>
+            <p className="text-[10px] sm:text-xs text-[#FFE7A3]/85 font-semibold truncate">
+              {siteSettings?.homepage?.sectionBadge || 'BCA 3rd Semester · Solved Question Banks'}
+            </p>
           </div>
 
-          <div className="shrink-0 flex items-center gap-2 px-3 py-1 rounded-xl bg-gradient-to-r from-[#970014] to-[#65000D] border border-[#FFD34E]/40 shadow-sm">
-            <span className="text-sm">🔥</span>
-            <div>
-              <span className="block text-[8px] uppercase font-black text-[#FFE7A3] tracking-wide">
-                {livePricing?.offerTitle || 'Special Launch Offer'}
-              </span>
-              <span className="text-xs sm:text-sm font-black text-[#FFD34E] leading-tight">
-                {livePricing?.offerBadgeText || 'Up to 34% OFF'}
-              </span>
-            </div>
+          <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#970014] to-[#65000D] border border-[#FFD34E]/40 shadow-sm">
+            <Sparkles className="w-3 h-3 text-[#FFD34E] shrink-0" />
+            <span className="text-[10.5px] sm:text-xs font-black text-[#FFD34E] whitespace-nowrap">
+              {livePricing?.offerBadgeText || 'Up to 34% OFF'}
+            </span>
           </div>
         </div>
 
-        {/* Responsive Grid: Packages (8 cols) & Order Summary (4 cols) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-5 items-start">
+        {/* Responsive Grid: Packages (8 cols) & Single Order Summary (4 cols) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 sm:gap-4 items-start">
           {/* Left Column: Compact Compulsory + Optional Add-ons */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-3 sm:space-y-4">
+          <div className="lg:col-span-7 xl:col-span-8 space-y-2 sm:space-y-3">
 
-            {/* ========================================================
-                1. COMPULSORY CORE PACKAGE (Compact 2026 Layout)
-                ======================================================== */}
-            <div className="liquid-glass-card rounded-xl sm:rounded-2xl p-3 sm:p-3.5 border border-[#FFE7A3]/30 shadow-md relative overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 mb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black bg-[#FFD34E] text-[#3D0009] shadow-xs">
-                    <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
-                    COMPULSORY
+            {/* 1. COMPULSORY CORE PACKAGE — Emerald Green Fixed Theme */}
+            <div className="rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 bg-gradient-to-br from-emerald-950/80 via-[#072a1d]/75 to-black/65 border border-emerald-400/50 shadow-md">
+              <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-2 border-b border-emerald-400/20">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-400 text-[#042416] shrink-0">
+                      <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
+                      FIXED
+                    </span>
+                    <h3 className="text-xs sm:text-sm font-black text-white truncate">
+                      Main Core ({coreProducts.length} Papers)
+                    </h3>
+                  </div>
+                  <span className="block text-[9.5px] font-bold text-emerald-300 mt-0.5">
+                    ✓ অটো-সিলেক্টেড · এগুলো বাদ দেওয়া যাবে না
                   </span>
-                  <h3 className="text-xs sm:text-sm font-black text-white">
-                    Main Core Package ({coreProducts.length} Subjects)
-                  </h3>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {coreTier.regularPrice > activeCorePrice && (
-                    <span className="text-[11px] text-[#FFE7A3]/60 line-through font-medium">
+                    <span className="text-[10px] text-emerald-200/60 line-through font-medium">
                       ₹{coreTier.regularPrice}
                     </span>
                   )}
-                  <span className="text-sm sm:text-base font-black text-[#FFD34E] tabular-nums">
+                  <span className="text-sm sm:text-base font-black text-emerald-300 tabular-nums">
                     ₹{activeCorePrice}
                   </span>
-                  {coreTier.regularPrice > activeCorePrice && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/30">
-                      Save ₹{coreTier.regularPrice - activeCorePrice}
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Explicit Compulsory Notice */}
-              <div className="mb-2.5 px-2.5 py-1.5 rounded-lg bg-black/40 border border-[#FFD34E]/30 flex items-center gap-2 text-[11px] text-amber-200">
-                <Info className="w-3.5 h-3.5 text-[#FFD34E] shrink-0" />
-                <span className="font-semibold text-white/95">
-                  <strong className="text-[#FFD34E]">Compulsory:</strong>{' '}
-                  {siteSettings?.homepage?.compulsoryNotice || 'Students must select all 4 compulsory subjects.'}
-                </span>
-              </div>
-
-              {/* Compact 4-Subject Grid (Clean, reduced vertical height) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* Compact 2x2 / 4-col Core Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                 {coreProducts.map((prod) => {
                   const isPurchased = purchasedProductIds.includes(prod.id);
                   return (
                     <div
                       key={prod.id}
-                      className="bg-black/40 rounded-xl p-2 border border-white/10 hover:border-[#FFE7A3]/40 flex flex-col justify-between text-left transition-all group"
+                      className="bg-emerald-950/45 rounded-lg p-1.5 sm:p-2 border border-emerald-400/30 flex items-center gap-1.5 sm:gap-2 text-left"
                     >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-9 h-12 rounded overflow-hidden bg-black/60 shrink-0 border border-white/15">
-                          {prod.coverImageUrl || prod.imageUrl ? (
-                            <img
-                              src={prod.coverImageUrl || prod.imageUrl}
-                              alt={prod.subjectName}
-                              className="w-full h-full object-contain p-0.5"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-[#65000D] text-[#FFE7A3] font-bold text-[8px] p-0.5 text-center">
-                              {prod.subjectCode}
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <span className="text-[9px] font-mono font-bold text-[#FFD34E] block">
-                            {prod.subjectCode}
-                          </span>
-                          <h4 className="font-bold text-[11px] text-white line-clamp-1 group-hover:text-[#FFE7A3]">
-                            {prod.subjectName}
-                          </h4>
-                        </div>
-                      </div>
-
-                      <div className="pt-1 border-t border-white/10 flex items-center justify-between text-[10px]">
-                        <span className="text-emerald-400 font-bold flex items-center gap-0.5">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                          <span>Included</span>
-                        </span>
-                        {isPurchased && onOpenViewer && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenViewer(prod.id)}
-                            className="text-[9px] font-bold text-emerald-300 underline cursor-pointer"
-                          >
-                            Read
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Explanatory Bridge Banner for Optional Sections */}
-            <div className="px-3 py-2 rounded-xl bg-gradient-to-r from-black/50 via-[#65000D]/30 to-black/50 border border-white/15 flex items-center gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/30 uppercase shrink-0">
-                OPTIONAL
-              </span>
-              <p className="text-[11px] text-white/90">
-                <strong className="text-[#FFD34E]">Optional:</strong>{' '}
-                {siteSettings?.homepage?.optionalNotice || '2 additional optional sections are available. Students can choose them according to their preference.'}
-              </p>
-            </div>
-
-            {/* ========================================================
-                2. OPTIONAL LANGUAGE SECTION (Bengali / Sanskrit)
-                ======================================================== */}
-            <div className="liquid-glass-card rounded-xl sm:rounded-2xl p-3 sm:p-3.5 border border-white/15 shadow-md">
-              <div className="flex items-center justify-between gap-1.5 pb-2 mb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/40">
-                    OPTIONAL 1
-                  </span>
-                  <h3 className="text-xs sm:text-sm font-bold text-white">
-                    Language Add-on (Select Max 1)
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  {langTier.regularPrice > activeLangPrice && (
-                    <span className="text-[11px] text-[#FFE7A3]/60 line-through">
-                      +₹{langTier.regularPrice}
-                    </span>
-                  )}
-                  <span className="text-xs sm:text-sm font-black text-[#FFD34E]">
-                    +₹{activeLangPrice}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mb-2 text-[11px]">
-                <p className="text-white/70">
-                  Select your language paper, or skip:
-                </p>
-                {pricing.selectedLanguageId && (
-                  <button
-                    type="button"
-                    onClick={() => onSelectLanguage(null)}
-                    className="text-[10px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/60 border border-rose-500/30 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Skip Language</span>
-                  </button>
-                )}
-              </div>
-
-              {/* 2 Language Cards (Side-by-side) */}
-              <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-                {languageProducts.map((prod) => {
-                  const isSelected = pricing.selectedLanguageId === prod.id;
-                  return (
-                    <div
-                      key={prod.id}
-                      onClick={() => onSelectLanguage(isSelected ? null : prod.id)}
-                      className={`rounded-xl p-2 sm:p-2.5 border transition-all cursor-pointer flex items-center gap-2 sm:gap-2.5 text-left select-none relative ${
-                        isSelected
-                          ? 'liquid-glass-card-selected border-[#FFD34E] ring-2 ring-[#FFD34E]/60 shadow-[0_0_15px_rgba(255,211,78,0.25)]'
-                          : 'bg-black/35 border-white/15 hover:border-[#FFE7A3]/40 hover:bg-black/45'
-                      }`}
-                    >
-                      <div className="w-9 sm:w-10 aspect-[3/4] rounded overflow-hidden shrink-0 bg-black/60 border border-white/15 relative">
+                      <div className="w-7 h-9 sm:w-9 sm:h-11 rounded overflow-hidden bg-black/60 shrink-0 border border-emerald-400/30">
                         {prod.coverImageUrl || prod.imageUrl ? (
                           <img
                             src={prod.coverImageUrl || prod.imageUrl}
@@ -319,39 +184,119 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-[#65000D] text-[#FFE7A3] font-bold text-[8px] p-0.5 text-center">
+                          <div className="w-full h-full flex items-center justify-center bg-emerald-900 text-emerald-100 font-bold text-[7px] p-0.5 text-center">
                             {prod.subjectCode}
                           </div>
                         )}
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-[#FFD34E]/30 flex items-center justify-center">
-                            <Check className="w-3.5 h-3.5 text-[#FFD34E] stroke-[3]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[8.5px] font-mono font-bold text-emerald-300 truncate">
+                            {prod.subjectCode}
+                          </span>
+                          {isPurchased && onOpenViewer ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenViewer(prod.id)}
+                              className="text-[8.5px] font-bold text-emerald-300 underline cursor-pointer shrink-0"
+                            >
+                              Read
+                            </button>
+                          ) : (
+                            <Check className="w-3 h-3 text-emerald-400 stroke-[3] shrink-0" />
+                          )}
+                        </div>
+                        <h4 className="font-bold text-[10.5px] text-white truncate">
+                          {prod.subjectName}
+                        </h4>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. OPTIONAL LANGUAGE SECTION — Sky Blue Choose Theme */}
+            <div className="rounded-xl sm:rounded-2xl p-2.5 sm:p-3 bg-gradient-to-br from-sky-950/80 via-[#09243b]/75 to-black/65 border border-sky-400/45 shadow-md">
+              <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-2 border-b border-sky-400/20">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-400 text-[#062133] shrink-0">
+                      CHOOSE 1
+                    </span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white truncate">
+                      Language Add-on
+                    </h3>
+                  </div>
+                  <span className="block text-[9.5px] font-bold text-sky-300 mt-0.5">
+                    নিজে বেছে নিন (যেকোনো ১টি বা Skip)
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {pricing.selectedLanguageId && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectLanguage(null)}
+                      className="text-[9.5px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-950/70 border border-rose-500/40 cursor-pointer"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                      <span>Skip</span>
+                    </button>
+                  )}
+                  <span className="text-xs sm:text-sm font-black text-sky-300">
+                    +₹{activeLangPrice}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                {languageProducts.map((prod) => {
+                  const isSelected = pricing.selectedLanguageId === prod.id;
+                  return (
+                    <div
+                      key={prod.id}
+                      onClick={() => onSelectLanguage(isSelected ? null : prod.id)}
+                      className={`rounded-lg p-1.5 sm:p-2 border transition-all cursor-pointer flex items-center gap-2 text-left select-none ${
+                        isSelected
+                          ? 'bg-sky-900/65 border-[#FFD34E] ring-1 ring-[#FFD34E]/80 shadow-[0_0_12px_rgba(255,211,78,0.2)]'
+                          : 'bg-sky-950/35 border-sky-400/30 hover:border-sky-300'
+                      }`}
+                    >
+                      <div className="w-7 h-9 sm:w-9 sm:h-11 rounded overflow-hidden shrink-0 bg-black/60 border border-sky-400/25">
+                        {prod.coverImageUrl || prod.imageUrl ? (
+                          <img
+                            src={prod.coverImageUrl || prod.imageUrl}
+                            alt={prod.subjectName}
+                            className="w-full h-full object-contain p-0.5"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-sky-900 text-sky-100 font-bold text-[7px] text-center">
+                            {prod.subjectCode}
                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-[9px] font-mono font-bold text-[#FFE7A3]">
+                          <span className="text-[8.5px] font-mono font-bold text-sky-200">
                             {prod.subjectCode}
                           </span>
-                          <span className="text-[10px] font-black text-[#FFD34E]">
+                          <span className="text-[9.5px] font-black text-[#FFD34E]">
                             +₹{activeLangPrice}
                           </span>
                         </div>
-                        <h4 className="font-bold text-[11px] text-white truncate mt-0.5">
+                        <h4 className="font-bold text-[10.5px] text-white truncate">
                           {prod.subjectName}
                         </h4>
-                        <span className="text-[9px] text-[#FFE7A3]/70 block truncate">
-                          {isSelected ? '✓ Selected' : 'Tap to Add'}
-                        </span>
                       </div>
 
                       <div
-                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                           isSelected
                             ? 'bg-[#FFD34E] border-[#FFD34E] text-[#3D0009]'
-                            : 'border-white/30 bg-black/40'
+                            : 'border-sky-300/50 bg-black/40'
                         }`}
                       >
                         {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
@@ -362,106 +307,90 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
               </div>
             </div>
 
-            {/* ========================================================
-                3. OPTIONAL SPECIALIZATION SECTION (5 Options)
-                ======================================================== */}
-            <div className="liquid-glass-card rounded-xl sm:rounded-2xl p-3 sm:p-3.5 border border-white/15 shadow-md">
-              <div className="flex items-center justify-between gap-1.5 pb-2 mb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/40">
-                    OPTIONAL 2
+            {/* 3. OPTIONAL SPECIALIZATION SECTION — Royal Violet Choose Theme */}
+            <div className="rounded-xl sm:rounded-2xl p-2.5 sm:p-3 bg-gradient-to-br from-violet-950/80 via-[#221040]/75 to-black/65 border border-violet-400/45 shadow-md">
+              <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-2 border-b border-violet-400/20">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-violet-400 text-[#1d083d] shrink-0">
+                      CHOOSE 1
+                    </span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white truncate">
+                      Specialization Add-on
+                    </h3>
+                  </div>
+                  <span className="block text-[9.5px] font-bold text-violet-200 mt-0.5">
+                    নিজে বেছে নিন (যেকোনো ১টি বা Skip)
                   </span>
-                  <h3 className="text-xs sm:text-sm font-bold text-white">
-                    Specialization Add-on (Select Max 1)
-                  </h3>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  {specTier.regularPrice > activeSpecPrice && (
-                    <span className="text-[11px] text-[#FFE7A3]/60 line-through">
-                      +₹{specTier.regularPrice}
-                    </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {pricing.selectedSpecializationId && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectSpecialization(null)}
+                      className="text-[9.5px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-rose-950/70 border border-rose-500/40 cursor-pointer"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                      <span>Skip</span>
+                    </button>
                   )}
-                  <span className="text-xs sm:text-sm font-black text-[#FFD34E]">
+                  <span className="text-xs sm:text-sm font-black text-violet-200">
                     +₹{activeSpecPrice}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mb-2 text-[11px]">
-                <p className="text-white/70">
-                  Select 1 elective specialization paper, or skip:
-                </p>
-                {pricing.selectedSpecializationId && (
-                  <button
-                    type="button"
-                    onClick={() => onSelectSpecialization(null)}
-                    className="text-[10px] font-bold text-rose-300 hover:text-rose-200 flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/60 border border-rose-500/30 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                    <span>Skip Specialization</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Compact 2/3/5 Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-2">
                 {specializationProducts.map((prod) => {
                   const isSelected = pricing.selectedSpecializationId === prod.id;
                   return (
                     <div
                       key={prod.id}
                       onClick={() => onSelectSpecialization(isSelected ? null : prod.id)}
-                      className={`rounded-xl p-2 border transition-all cursor-pointer flex flex-col justify-between text-left select-none relative group ${
+                      className={`rounded-lg p-1.5 sm:p-2 border transition-all cursor-pointer flex items-center lg:flex-col lg:items-stretch gap-1.5 text-left select-none ${
                         isSelected
-                          ? 'liquid-glass-card-selected border-[#FFD34E] ring-2 ring-[#FFD34E]/60 shadow-[0_0_12px_rgba(255,211,78,0.25)]'
-                          : 'bg-black/35 border-white/15 hover:border-[#FFE7A3]/40 hover:bg-black/45'
+                          ? 'bg-violet-900/65 border-[#FFD34E] ring-1 ring-[#FFD34E]/80 shadow-[0_0_12px_rgba(255,211,78,0.2)]'
+                          : 'bg-violet-950/35 border-violet-400/30 hover:border-violet-300'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-black/60 text-[#FFE7A3] border border-white/10">
-                          {prod.subjectCode}
-                        </span>
-                        <div
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? 'bg-[#FFD34E] border-[#FFD34E] text-[#3D0009]'
-                              : 'border-white/30 bg-black/60'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                      </div>
-
-                      <div className="aspect-[3/4] max-h-20 sm:max-h-24 w-full rounded overflow-hidden bg-black/60 mb-1 border border-white/15 relative">
+                      <div className="w-7 h-9 lg:w-full lg:aspect-[3/4] lg:max-h-20 rounded overflow-hidden bg-black/60 shrink-0 border border-violet-400/25">
                         {prod.coverImageUrl || prod.imageUrl ? (
                           <img
                             src={prod.coverImageUrl || prod.imageUrl}
                             alt={prod.subjectName}
-                            className="w-full h-full object-contain p-0.5 group-hover:scale-105 transition-transform duration-200"
+                            className="w-full h-full object-contain p-0.5"
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-[#65000D] text-[#FFE7A3] font-bold text-[8px] p-0.5 text-center">
+                          <div className="w-full h-full flex items-center justify-center bg-violet-900 text-violet-100 font-bold text-[7px] text-center">
                             {prod.subjectCode}
                           </div>
                         )}
                       </div>
 
-                      <div>
-                        <h4 className="font-bold text-[10px] sm:text-[11px] text-white truncate group-hover:text-[#FFE7A3]">
-                          {prod.subjectName}
-                        </h4>
-                        <div className="flex items-center justify-between text-[9px] mt-0.5">
-                          <span className="font-black text-[#FFD34E]">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[8px] font-mono font-bold text-violet-200 truncate">
+                            {prod.subjectCode}
+                          </span>
+                          <span className="text-[9px] font-black text-[#FFD34E] shrink-0">
                             +₹{activeSpecPrice}
                           </span>
-                          {specTier.regularPrice > activeSpecPrice && (
-                            <span className="text-white/40 line-through">
-                              ₹{specTier.regularPrice}
-                            </span>
-                          )}
                         </div>
+                        <h4 className="font-bold text-[10px] sm:text-[11px] text-white truncate">
+                          {prod.subjectName}
+                        </h4>
+                      </div>
+
+                      <div
+                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 lg:hidden ${
+                          isSelected
+                            ? 'bg-[#FFD34E] border-[#FFD34E] text-[#3D0009]'
+                            : 'border-violet-300/50 bg-black/60'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
                       </div>
                     </div>
                   );
@@ -470,210 +399,104 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Live Order Summary (Sticky on Desktop) */}
+          {/* Right Column: Royal Maroon-Gold Order Summary & Checkout CTA */}
           <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-20">
-            <div className="liquid-glass-card rounded-2xl p-3.5 sm:p-4.5 border border-[#FFE7A3]/40 shadow-xl text-white">
-              {/* Header */}
-              <div className="flex items-center justify-between pb-2.5 border-b border-white/15">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-b from-[#e6001a] to-[#970014] flex items-center justify-center text-white shadow-xs border border-white/20">
-                    <Layers className="w-3.5 h-3.5 text-[#FFE7A3]" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-sm text-white leading-tight">
-                      Order Summary
-                    </h3>
-                    <span className="text-[10px] text-[#FFE7A3]/80">
-                      Real-time Package Total
-                    </span>
-                  </div>
+            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-gradient-to-br from-[#5A000B]/95 via-[#360007]/95 to-black/90 border border-[#FFD34E]/60 shadow-xl text-white space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-white/15">
+                <div className="flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-[#FFD34E]" />
+                  <h3 className="font-black text-xs sm:text-sm text-white">Order Summary</h3>
                 </div>
-
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/40">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/40">
                   <BookOpen className="w-3 h-3 text-[#FFD34E]" />
                   {pricing.totalPdfs} Subjects
                 </span>
               </div>
 
-              {/* Items Breakdown */}
-              <div className="py-2.5 space-y-2 text-xs border-b border-white/15">
-                {/* 1. Core */}
-                <div className="bg-black/35 p-2 rounded-xl border border-white/10 flex items-center justify-between">
-                  <div>
-                    <span className="text-[#FFE7A3] text-[11px] font-bold block">
-                      ✓ {coreProducts.length} Core Subjects (Compulsory)
-                    </span>
-                    <span className="text-[9px] text-white/60">
-                      {coreProducts.map((c) => c.subjectCode).join(', ')}
-                    </span>
+              {/* Compact Selected Breakdown */}
+              <div className="space-y-1 text-[11px] pb-2 border-b border-white/15">
+                <div className="flex items-center justify-between text-white/90">
+                  <span>✓ {coreProducts.length} Core Subjects (Compulsory)</span>
+                  <span className="font-black text-[#FFD34E]">₹{activeCorePrice}</span>
+                </div>
+                {activeLanguageProduct && (
+                  <div className="flex items-center justify-between text-white/90">
+                    <span className="truncate pr-2">+ {activeLanguageProduct.subjectName}</span>
+                    <span className="font-black text-[#FFD34E] shrink-0">+₹{activeLangPrice}</span>
                   </div>
-                  <span className="text-[#FFD34E] font-black text-xs">
-                    ₹{activeCorePrice}
-                  </span>
-                </div>
-
-                {/* 2. Language */}
-                <div className="bg-black/35 p-2 rounded-xl border border-white/10 flex items-center justify-between text-[11px]">
-                  <div>
-                    <span className="font-bold text-[#FFE7A3]">Language:</span>
-                    <span className="text-[10px] text-white/80 block">
-                      {activeLanguageProduct ? activeLanguageProduct.subjectName : 'None (Skipped)'}
-                    </span>
-                  </div>
-                  {activeLanguageProduct ? (
-                    <div className="flex items-center gap-1">
-                      <span className="font-black text-[#FFD34E] text-xs">
-                        +₹{activeLangPrice}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onSelectLanguage(null)}
-                        className="text-white/40 hover:text-rose-400 p-0.5 cursor-pointer"
-                        title="Remove"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-white/40 text-[10px]">₹0</span>
-                  )}
-                </div>
-
-                {/* 3. Specialization */}
-                <div className="bg-black/35 p-2 rounded-xl border border-white/10 flex items-center justify-between text-[11px]">
-                  <div>
-                    <span className="font-bold text-[#FFE7A3]">Specialization:</span>
-                    <span className="text-[10px] text-white/80 block">
-                      {activeSpecializationProduct ? activeSpecializationProduct.subjectName : 'None (Skipped)'}
-                    </span>
-                  </div>
-                  {activeSpecializationProduct ? (
-                    <div className="flex items-center gap-1">
-                      <span className="font-black text-[#FFD34E] text-xs">
-                        +₹{activeSpecPrice}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onSelectSpecialization(null)}
-                        className="text-white/40 hover:text-rose-400 p-0.5 cursor-pointer"
-                        title="Remove"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-white/40 text-[10px]">₹0</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Price Calculation & Checkout */}
-              <div className="pt-2.5 space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-white/60">
-                  <span>Regular Total Price:</span>
-                  <span className="line-through text-[#FFE7A3]/50">
-                    ₹{pricing.regularPrice}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-sm text-white">Total Amount:</span>
-                  <span className="text-2xl font-black text-[#FFD34E] tabular-nums">
-                    ₹{pricing.launchOfferPrice}
-                  </span>
-                </div>
-
-                <div className="bg-[#FFD34E]/15 border border-[#FFD34E]/40 text-[#FFE7A3] px-2.5 py-1 rounded-lg flex items-center justify-between text-[11px] font-bold">
-                  <span className="flex items-center gap-1">
-                    <TrendingDown className="w-3 h-3 text-[#FFD34E]" />
-                    Total Savings:
-                  </span>
-                  <span className="text-[#FFD34E]">Save ₹{pricing.totalSavings}</span>
-                </div>
-
-                {!isLoggedIn ? (
-                  <div className="bg-black/45 border border-[#FFD34E]/45 rounded-xl p-2.5 space-y-2 mt-1">
-                    <p className="text-[11px] text-[#FFE7A3] leading-snug font-semibold">
-                      অর্ডার ও পেমেন্ট করার আগে একবার <strong className="text-[#FFD34E]">রেজিস্ট্রেশন</strong> করে নিন — পরে লগআউট হলেও শুধু <strong className="text-white">ইমেইল আইডি</strong> দিয়েই লগইন করতে পারবেন।
-                    </p>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => (onOpenAuth ? onOpenAuth(true) : onProceedToCheckout())}
-                        className="btn-gold-primary flex-1 py-2 px-3 rounded-full text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                      >
-                        <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Register & Pay (₹{pricing.launchOfferPrice})</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => (onOpenAuth ? onOpenAuth(false) : onProceedToCheckout())}
-                        className="px-3 py-2 rounded-full text-[11px] font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer shrink-0"
-                      >
-                        Login
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 mt-1">
-                    {studentName && (
-                      <div className="px-2.5 py-1 rounded-lg bg-emerald-950/50 border border-emerald-400/35 text-[11px] text-emerald-200 flex items-center gap-1.5 font-semibold truncate">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="truncate">Account: {studentName}</span>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={onProceedToCheckout}
-                      className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
-                    >
-                      <span>Proceed to Payment</span>
-                      <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                    </button>
+                )}
+                {activeSpecializationProduct && (
+                  <div className="flex items-center justify-between text-white/90">
+                    <span className="truncate pr-2">+ {activeSpecializationProduct.subjectName}</span>
+                    <span className="font-black text-[#FFD34E] shrink-0">+₹{activeSpecPrice}</span>
                   </div>
                 )}
               </div>
+
+              {/* Total & Single Clear Payment CTA */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-black text-xs text-white/85">Total:</span>
+                  <span className="text-2xl font-black text-[#FFD34E] tabular-nums leading-none">
+                    ₹{pricing.launchOfferPrice}
+                  </span>
+                  {pricing.regularPrice > pricing.launchOfferPrice && (
+                    <span className="text-[11px] line-through text-white/45">
+                      ₹{pricing.regularPrice}
+                    </span>
+                  )}
+                </div>
+                {pricing.totalSavings > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FFD34E]/15 text-[#FFD34E] border border-[#FFD34E]/35">
+                    <TrendingDown className="w-3 h-3" />
+                    Save ₹{pricing.totalSavings}
+                  </span>
+                )}
+              </div>
+
+              {!isLoggedIn ? (
+                <div className="space-y-1.5 pt-0.5">
+                  <p className="text-[10.5px] text-[#FFE7A3]/90 leading-snug">
+                    পেমেন্টের আগে একবার <strong>Register</strong> করুন (পরে শুধু ইমেইল দিয়েই লগইন করতে পারবেন)।
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => (onOpenAuth ? onOpenAuth(true) : onProceedToCheckout())}
+                      className="btn-gold-primary flex-1 py-2.5 px-3 rounded-full text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Register &amp; Pay (₹{pricing.launchOfferPrice})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => (onOpenAuth ? onOpenAuth(false) : onProceedToCheckout())}
+                      className="px-3.5 py-2.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer shrink-0"
+                    >
+                      Login
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5 pt-0.5">
+                  {studentName && (
+                    <div className="px-2.5 py-1 rounded-lg bg-emerald-950/50 border border-emerald-400/35 text-[10.5px] text-emerald-200 flex items-center gap-1.5 font-semibold truncate">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">Account: {studentName}</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onProceedToCheckout}
+                    className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
+                  >
+                    <span>Proceed to Payment (₹{pricing.launchOfferPrice})</span>
+                    <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Mobile Sticky Quick-Checkout Action Bar (Mobile-First optimization) */}
-      <div className="lg:hidden fixed bottom-14 left-0 right-0 z-40 p-2.5 bg-[#3D0009]/95 backdrop-blur-md border-t border-[#FFD34E]/30 shadow-[0_-5px_20px_rgba(0,0,0,0.8)]">
-        <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-          <div>
-            <span className="text-[10px] text-[#FFE7A3] font-bold block">
-              {pricing.totalPdfs} Subjects Selected
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black text-[#FFD34E] leading-tight">
-                ₹{pricing.launchOfferPrice}
-              </span>
-              <span className="text-[10px] text-white/50 line-through">
-                ₹{pricing.regularPrice}
-              </span>
-            </div>
-          </div>
-
-          {!isLoggedIn ? (
-            <button
-              type="button"
-              onClick={() => (onOpenAuth ? onOpenAuth(true) : onProceedToCheckout())}
-              className="btn-gold-primary py-2 px-4 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
-            >
-              <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Register & Pay</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onProceedToCheckout}
-              className="btn-gold-primary py-2 px-5 rounded-full text-xs font-black flex items-center gap-1 shadow-md cursor-pointer shrink-0"
-            >
-              <span>Proceed to Pay</span>
-              <ArrowRight className="w-3 h-3 stroke-[2.5]" />
-            </button>
-          )}
         </div>
       </div>
     </section>

@@ -90,27 +90,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           <button
-            onClick={() => scrollToSection('how-it-works')}
-            className="px-3 py-1.5 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-          >
-            How It Works
-          </button>
-
-          <button
             onClick={onOpenAbout}
-            className="px-3 py-1.5 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            className={`px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+              currentView === 'about'
+                ? 'bg-[#970014] text-[#FFE7A3] border border-[#FFD34E]/50 font-bold'
+                : 'text-white/85 hover:text-white hover:bg-white/10'
+            }`}
           >
             About
           </button>
 
           <button
             onClick={onOpenContact}
-            className="px-3 py-1.5 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            className={`px-3 py-1.5 rounded-full transition-all cursor-pointer ${
+              currentView === 'contact'
+                ? 'bg-[#970014] text-[#FFE7A3] border border-[#FFD34E]/50 font-bold'
+                : 'text-white/85 hover:text-white hover:bg-white/10'
+            }`}
           >
             Contact
           </button>
 
           <button
+            data-tour="my-notes-desktop"
             onClick={() => {
               if (isLoggedIn) {
                 setCurrentView('purchased');
@@ -221,17 +223,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               BCA 3rd Sem Subjects
             </button>
             <button
-              onClick={() => scrollToSection('how-it-works')}
-              className="text-left py-1.5 px-3 rounded-lg hover:bg-white/10 text-white/90"
-            >
-              How It Works
-            </button>
-            <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 onOpenAbout();
               }}
-              className="text-left py-1.5 px-3 rounded-lg hover:bg-white/10 text-white/90"
+              className={`text-left py-1.5 px-3 rounded-lg hover:bg-white/10 ${
+                currentView === 'about' ? 'text-[#FFD34E] bg-white/10 font-bold' : 'text-white/90'
+              }`}
             >
               About Platform
             </button>

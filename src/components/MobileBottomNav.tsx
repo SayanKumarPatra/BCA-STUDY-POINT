@@ -98,6 +98,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
       {/* 5. My Notes / Purchased Tab */}
       <button
+        data-tour="my-notes-mobile"
         onClick={() => {
           if (isLoggedIn) {
             setCurrentView('purchased');

@@ -118,7 +118,7 @@ export const HeroBannerSlider: React.FC<HeroBannerSliderProps> = ({ onExploreCli
 
   return (
     <div
-      className="w-full max-w-5xl mx-auto my-1.5 sm:my-2.5 relative select-none"
+      className="w-full max-w-5xl mx-auto my-0.5 sm:my-2 relative select-none"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
@@ -210,7 +210,7 @@ export const HeroBannerSlider: React.FC<HeroBannerSliderProps> = ({ onExploreCli
       </div>
 
       {activeSlides.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mt-2">
+        <div className="flex items-center justify-center gap-1.5 mt-1">
           {activeSlides.map((s, idx) => (
             <button
               key={s.id}

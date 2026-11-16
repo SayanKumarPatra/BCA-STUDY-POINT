@@ -7,7 +7,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { HeroBannerSlider } from './components/HeroBannerSlider';
-import { HowItWorks } from './components/HowItWorks';
 import { CheckoutModal } from './components/CheckoutModal';
 import { PurchasedContent } from './components/PurchasedContent';
 import { SecurePdfViewer } from './components/SecurePdfViewer';
@@ -18,6 +17,7 @@ import { AboutModal } from './components/AboutModal';
 import { ContactModal } from './components/ContactModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PackagePricingSection } from './components/PackagePricingSection';
+import { PostPurchaseGuideTour } from './components/PostPurchaseGuideTour';
 import {
   CORE_SUBJECT_IDS,
   LANGUAGE_SUBJECT_IDS,
@@ -83,6 +83,7 @@ function AppContent() {
   } | null>(null);
   const [authDefaultRegister, setAuthDefaultRegister] = useState(false);
   const [redirectToCheckoutAfterAuth, setRedirectToCheckoutAfterAuth] = useState(false);
+  const [showPostPurchaseGuide, setShowPostPurchaseGuide] = useState(false);
 
   const handleOpenAuthForCheckout = (isRegister = true) => {
     setAuthDefaultRegister(isRegister);
@@ -308,6 +309,12 @@ function AppContent() {
               }
               setSelectedProductIds([]);
               setCurrentView('purchased');
+              setShowPostPurchaseGuide(true);
+            }}
+            onConfirmedExit={() => {
+              setSelectedProductIds([]);
+              setCurrentView('catalog');
+              setShowPostPurchaseGuide(true);
             }}
           />
         ) : currentView === 'about' ? (
@@ -336,7 +343,7 @@ function AppContent() {
           /* Public Storefront Layout Clean & Streamlined */
           <>
             {/* 2. Sliding Banner Carousel directly beneath the Navbar */}
-            <div className="pt-2 px-2 sm:px-4">
+            <div className="pt-1 px-2 sm:px-4">
               <HeroBannerSlider
                 banners={banners}
                 onExploreClick={() => {
@@ -361,8 +368,32 @@ function AppContent() {
               onOpenViewer={(prodId) => setActiveViewerProductId(prodId)}
             />
 
-            {/* 4. How It Works: Simple 1, 2, 3, 4 numbered points */}
-            <HowItWorks title={siteSettings?.homepage?.howItWorksTitle} />
+            {/* 4. Compact Bottom Quick Links (No Extra Scroll Bloat) */}
+            <footer className="max-w-5xl mx-auto px-3 pt-2 pb-4 text-center">
+              <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-white/65">
+                <button
+                  onClick={() => {
+                    setCurrentView('about');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-[#FFE7A3] hover:text-white font-semibold underline-offset-2 hover:underline cursor-pointer"
+                >
+                  About &amp; Disclaimer
+                </button>
+                <span aria-hidden="true" className="text-white/30">·</span>
+                <button
+                  onClick={() => {
+                    setCurrentView('contact');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-white/75 hover:text-white font-medium underline-offset-2 hover:underline cursor-pointer"
+                >
+                  Contact Support
+                </button>
+                <span aria-hidden="true" className="text-white/30">·</span>
+                <span className="text-white/50">BCA Study Point – Your Study Partner.</span>
+              </div>
+            </footer>
           </>
         )}
       </main>
@@ -385,6 +416,14 @@ function AppContent() {
         onClose={() => setDeviceMismatchData(null)}
         registeredDevice={deviceMismatchData?.registeredDevice}
         supportInfo={deviceMismatchData?.supportInfo}
+      />
+
+      {/* Post-Purchase Interactive Guided Spotlight Tour pointing directly to My Notes */}
+      <PostPurchaseGuideTour
+        isOpen={showPostPurchaseGuide}
+        currentView={currentView}
+        onNavigateView={(view) => setCurrentView(view)}
+        onClose={() => setShowPostPurchaseGuide(false)}
       />
 
       {/* 7. Native Mobile App Style Bottom Navigation Bar */}

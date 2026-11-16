@@ -9,11 +9,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { BRAND } from '../constants/brand';
 import { api } from '../services/api';
+import { findStudentInRealtimeDb, syncStudentProfileRealtime } from '../firebase/firebase';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultIsRegister?: boolean;
+  promptNote?: string;
   onSuccess?: () => void;
   isPage?: boolean;
 }
@@ -22,6 +24,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   defaultIsRegister = false,
+  promptNote,
   onSuccess,
   isPage = false,
 }) => {
@@ -79,6 +82,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           deviceInfo,
         });
 
+        await syncStudentProfileRealtime({
+          id: regRes.student.id,
+          fullName: regRes.student.fullName,
+          email: regRes.student.email,
+          mobile: regRes.student.mobile,
+        });
+
         loginStudent({
           id: regRes.student.id,
           fullName: regRes.student.fullName,
@@ -89,6 +99,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (onSuccess) onSuccess();
         onClose();
       } catch (err: any) {
+        if (err?.errorCode === 'ALREADY_EXISTS') {
+          setLoginIdentifier(cleanEmail);
+        }
         setError(err.message || 'রেজিস্ট্রেশন সম্পন্ন করা যায়নি।');
       } finally {
         setIsLoading(false);
@@ -114,6 +127,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (onSuccess) onSuccess();
         onClose();
       } catch (err: any) {
+        // Real-time Firebase RTDB fallback if backend didn't have the student yet
+        const rtdbStudent = await findStudentInRealtimeDb(cleanIdentifier);
+        if (rtdbStudent) {
+          loginStudent(rtdbStudent);
+          if (onSuccess) onSuccess();
+          onClose();
+          return;
+        }
         setError(
           err.message ||
             'এই মোবাইল নম্বর বা ইমেইল আইডিতে কোনো অ্যাকাউন্ট পাওয়া যায়নি। অনুগ্রহ করে Register করুন।'
@@ -202,11 +223,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </div>
 
+        {/* Contextual Prompt Note when coming from Package Selection */}
+        {promptNote && (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-[#FFD34E]/15 border border-[#FFD34E]/45 text-[11px] font-semibold text-[#FFE7A3] text-center leading-snug">
+            {promptNote}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && (
             <div className="p-3 bg-rose-950/90 border border-rose-500/60 rounded-xl text-xs text-rose-200 text-left space-y-1.5 shadow-md">
               <p>{error}</p>
-              {!isRegister && (
+              {!isRegister ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -216,6 +244,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className="text-xs font-bold text-[#FFD34E] hover:underline block cursor-pointer"
                 >
                   👉 নতুন অ্যাকাউন্ট তৈরি করতে Register-এ ক্লিক করুন
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegister(false);
+                    setError('');
+                  }}
+                  className="text-xs font-bold text-[#FFD34E] hover:underline block cursor-pointer"
+                >
+                  👉 ইতিমধ্যে অ্যাকাউন্ট থাকলে Login-এ ক্লিক করুন
                 </button>
               )}
             </div>

@@ -82,6 +82,21 @@ function AppContent() {
     supportInfo: any;
   } | null>(null);
   const [authDefaultRegister, setAuthDefaultRegister] = useState(false);
+  const [redirectToCheckoutAfterAuth, setRedirectToCheckoutAfterAuth] = useState(false);
+
+  const handleOpenAuthForCheckout = (isRegister = true) => {
+    setAuthDefaultRegister(isRegister);
+    setRedirectToCheckoutAfterAuth(true);
+    setCurrentView('auth');
+  };
+
+  const handleStartCheckout = () => {
+    if (student) {
+      setCurrentView('checkout');
+    } else {
+      handleOpenAuthForCheckout(true);
+    }
+  };
 
   const loadCatalog = () => {
     setIsLoadingCatalog(true);
@@ -236,8 +251,9 @@ function AppContent() {
         setCurrentView={setCurrentView}
         selectedCount={selectedProductIds.length}
         tagline={siteSettings?.tagline}
-        onOpenCart={() => setCurrentView('checkout')}
+        onOpenCart={handleStartCheckout}
         onOpenAuth={(isRegister = false) => {
+          setRedirectToCheckoutAfterAuth(false);
           setAuthDefaultRegister(isRegister);
           setCurrentView('auth');
         }}
@@ -251,10 +267,23 @@ function AppContent() {
           <AuthModal
             isOpen={true}
             isPage={true}
-            onClose={() => setCurrentView('catalog')}
+            onClose={() => {
+              setRedirectToCheckoutAfterAuth(false);
+              setCurrentView('catalog');
+            }}
             defaultIsRegister={authDefaultRegister}
+            promptNote={
+              redirectToCheckoutAfterAuth
+                ? 'প্যাকেজ পেমেন্ট করার আগে একবার রেজিস্ট্রেশন (বা ইমেইল দিয়ে লগইন) করে নিন — এটি ফায়ারবেসে সেভ থাকবে।'
+                : undefined
+            }
             onSuccess={() => {
-              setCurrentView('purchased');
+              if (redirectToCheckoutAfterAuth) {
+                setRedirectToCheckoutAfterAuth(false);
+                setCurrentView('checkout');
+              } else {
+                setCurrentView('purchased');
+              }
             }}
           />
         ) : currentView === 'checkout' ? (
@@ -266,6 +295,7 @@ function AppContent() {
             livePricing={livePricing}
             siteSettings={siteSettings}
             onRemoveProduct={handleRemoveFromCart}
+            onOpenAuth={(isReg) => handleOpenAuthForCheckout(isReg)}
             onPurchaseSuccess={() => {
               const activeStudent = student || JSON.parse(localStorage.getItem('bca_logged_in_student') || 'null');
               if (activeStudent?.id || activeStudent?.email || activeStudent?.mobile) {
@@ -322,9 +352,12 @@ function AppContent() {
               purchasedProductIds={purchasedProductIds}
               livePricing={livePricing}
               siteSettings={siteSettings}
+              isLoggedIn={Boolean(student)}
+              studentName={student?.fullName}
               onSelectLanguage={handleSelectLanguage}
               onSelectSpecialization={handleSelectSpecialization}
-              onProceedToCheckout={() => setCurrentView('checkout')}
+              onProceedToCheckout={handleStartCheckout}
+              onOpenAuth={(isReg) => handleOpenAuthForCheckout(isReg)}
               onOpenViewer={(prodId) => setActiveViewerProductId(prodId)}
             />
 
@@ -360,8 +393,9 @@ function AppContent() {
         setCurrentView={setCurrentView}
         selectedCount={selectedProductIds.length}
         whatsappPhone={siteSettings?.payment?.whatsappPhone || '8145775413'}
-        onOpenCart={() => setCurrentView('checkout')}
+        onOpenCart={handleStartCheckout}
         onOpenAuth={() => {
+          setRedirectToCheckoutAfterAuth(false);
           setAuthDefaultRegister(false);
           setCurrentView('auth');
         }}

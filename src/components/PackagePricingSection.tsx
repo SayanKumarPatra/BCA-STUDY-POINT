@@ -10,6 +10,7 @@ import {
   X,
   TrendingDown,
   Info,
+  UserPlus,
 } from 'lucide-react';
 import type { Product, EffectivePackagePricing, SiteSettings } from '../types';
 import {
@@ -26,9 +27,12 @@ interface PackagePricingSectionProps {
   purchasedProductIds?: string[];
   livePricing?: EffectivePackagePricing | null;
   siteSettings?: SiteSettings | null;
+  isLoggedIn?: boolean;
+  studentName?: string;
   onSelectLanguage: (langId: string | null) => void;
   onSelectSpecialization: (specId: string | null) => void;
   onProceedToCheckout: () => void;
+  onOpenAuth?: (isRegister: boolean) => void;
   onOpenViewer?: (productId: string) => void;
 }
 
@@ -38,9 +42,12 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
   purchasedProductIds = [],
   livePricing,
   siteSettings,
+  isLoggedIn = false,
+  studentName,
   onSelectLanguage,
   onSelectSpecialization,
   onProceedToCheckout,
+  onOpenAuth,
   onOpenViewer,
 }) => {
   const productMap = useMemo(() => {
@@ -584,14 +591,47 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
                   <span className="text-[#FFD34E]">Save ₹{pricing.totalSavings}</span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={onProceedToCheckout}
-                  className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-lg mt-1"
-                >
-                  <span>Proceed to Payment</span>
-                  <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
+                {!isLoggedIn ? (
+                  <div className="bg-black/45 border border-[#FFD34E]/45 rounded-xl p-2.5 space-y-2 mt-1">
+                    <p className="text-[11px] text-[#FFE7A3] leading-snug font-semibold">
+                      অর্ডার ও পেমেন্ট করার আগে একবার <strong className="text-[#FFD34E]">রেজিস্ট্রেশন</strong> করে নিন — পরে লগআউট হলেও শুধু <strong className="text-white">ইমেইল আইডি</strong> দিয়েই লগইন করতে পারবেন।
+                    </p>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => (onOpenAuth ? onOpenAuth(true) : onProceedToCheckout())}
+                        className="btn-gold-primary flex-1 py-2 px-3 rounded-full text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                      >
+                        <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span>Register & Pay (₹{pricing.launchOfferPrice})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => (onOpenAuth ? onOpenAuth(false) : onProceedToCheckout())}
+                        className="px-3 py-2 rounded-full text-[11px] font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer shrink-0"
+                      >
+                        Login
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 mt-1">
+                    {studentName && (
+                      <div className="px-2.5 py-1 rounded-lg bg-emerald-950/50 border border-emerald-400/35 text-[11px] text-emerald-200 flex items-center gap-1.5 font-semibold truncate">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="truncate">Account: {studentName}</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onProceedToCheckout}
+                      className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
+                    >
+                      <span>Proceed to Payment</span>
+                      <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -615,14 +655,25 @@ export const PackagePricingSection: React.FC<PackagePricingSectionProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onProceedToCheckout}
-            className="btn-gold-primary py-2 px-5 rounded-full text-xs font-black flex items-center gap-1 shadow-md cursor-pointer shrink-0"
-          >
-            <span>Proceed to Pay</span>
-            <ArrowRight className="w-3 h-3 stroke-[2.5]" />
-          </button>
+          {!isLoggedIn ? (
+            <button
+              type="button"
+              onClick={() => (onOpenAuth ? onOpenAuth(true) : onProceedToCheckout())}
+              className="btn-gold-primary py-2 px-4 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
+            >
+              <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Register & Pay</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onProceedToCheckout}
+              className="btn-gold-primary py-2 px-5 rounded-full text-xs font-black flex items-center gap-1 shadow-md cursor-pointer shrink-0"
+            >
+              <span>Proceed to Pay</span>
+              <ArrowRight className="w-3 h-3 stroke-[2.5]" />
+            </button>
+          )}
         </div>
       </div>
     </section>

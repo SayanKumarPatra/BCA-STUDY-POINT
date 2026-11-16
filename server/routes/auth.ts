@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
+import { firebaseSync } from '../firebaseSync';
 
 export const authRouter = Router();
 
@@ -71,6 +72,8 @@ authRouter.post('/student-register', async (req, res) => {
         allowDeviceTransfer: true,
       });
     }
+
+    await firebaseSync.syncStudent(student).catch(() => {});
 
     res.json({
       success: true,
@@ -164,12 +167,13 @@ authRouter.post('/student-login', async (req, res) => {
 
     student.lastLoginAt = new Date().toISOString();
     student.lastIp = clientIp;
-    db.upsertStudent({
+    const syncedStudent = db.upsertStudent({
       fullName: student.fullName,
       email: student.email,
       mobile: student.mobile,
       ip: clientIp,
     });
+    await firebaseSync.syncStudent(syncedStudent).catch(() => {});
 
     res.json({
       success: true,

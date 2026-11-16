@@ -289,11 +289,133 @@
     }
   ],
   "students": [],
-  "orders": [],
-  "purchases": [],
+  "orders": [
+    {
+      "orderId": "BCA-076348",
+      "userId": "std_1794821119246",
+      "studentName": "Sayan Kumar Patra",
+      "studentEmail": "sayankumarpatra2006@gmail.com",
+      "studentMobile": "8145775413",
+      "collegeName": "",
+      "studentId": "",
+      "selectedProductIds": [
+        "prod-bca-aec3-bengali",
+        "prod-bca-maj3",
+        "prod-bca-mdc3",
+        "prod-bca-min3",
+        "prod-bca-sec3",
+        "prod-spec-ml"
+      ],
+      "items": [
+        {
+          "price": 20,
+          "productId": "prod-bca-aec3-bengali",
+          "subjectCode": "AEC-3 (BEN)",
+          "subjectName": "BENGALI AEC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-maj3",
+          "subjectCode": "MAJ-3",
+          "subjectName": "COMPUTER ARCHITECTURE MAJ-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-mdc3",
+          "subjectCode": "MDC-3",
+          "subjectName": "BUSNIESS ETHICS & CSR MDC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-min3",
+          "subjectCode": "MIN-3",
+          "subjectName": "BUSINESS ENVIRONMENT MIN-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-sec3",
+          "subjectCode": "SEC-3",
+          "subjectName": "ADVANCED DATABASES SYSTEMS SEC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-spec-ml",
+          "subjectCode": "SPEC-ML",
+          "subjectName": "MACHINE LEARNING (ML)"
+        }
+      ],
+      "totalAmount": 99,
+      "paymentStatus": "verified",
+      "paymentReference": "WhatsApp Screenshot Verification",
+      "paymentGatewayOrderId": "",
+      "paymentGatewayPaymentId": "",
+      "paymentGatewaySignature": "",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "",
+      "createdAt": "2026-11-16T09:25:19.364Z",
+      "verifiedAt": "2026-11-16T09:26:34.318Z"
+    }
+  ],
+  "purchases": [
+    {
+      "purchaseId": "pur-1794822000402-mzva",
+      "userId": "std_1794821119246",
+      "productId": "prod-bca-aec3-bengali",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    },
+    {
+      "purchaseId": "pur-1794822000402-9wbc",
+      "userId": "std_1794821119246",
+      "productId": "prod-bca-maj3",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    },
+    {
+      "purchaseId": "pur-1794822000402-2uj0",
+      "userId": "std_1794821119246",
+      "productId": "prod-bca-mdc3",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    },
+    {
+      "purchaseId": "pur-1794822000402-18jp",
+      "userId": "std_1794821119246",
+      "productId": "prod-bca-min3",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    },
+    {
+      "purchaseId": "pur-1794822000402-6q31",
+      "userId": "std_1794821119246",
+      "productId": "prod-bca-sec3",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    },
+    {
+      "purchaseId": "pur-1794822000402-l0ha",
+      "userId": "std_1794821119246",
+      "productId": "prod-spec-ml",
+      "orderId": "BCA-076348",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T09:25:19.364Z"
+    }
+  ],
   "devices": [],
   "viewerSessions": [],
   "adminAuditLogs": [
+    {
+      "adminId": "admin_session",
+      "action": "ADMIN_LOGIN",
+      "details": "Administrator logged into management console.",
+      "id": "log-1794822060915-ue77",
+      "timestamp": "2026-11-16T09:41:00.915Z"
+    },
     {
       "id": "log-clear-1794817121625",
       "adminId": "admin",

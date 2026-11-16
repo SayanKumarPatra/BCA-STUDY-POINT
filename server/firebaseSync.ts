@@ -148,7 +148,7 @@ export const firebaseSync = {
    */
   async syncStudent(student: any) {
     if (!student?.id) return;
-    return safeRtdbFetch(`students/${student.id}`, 'PUT', {
+    return safeRtdbFetch(`students/${student.id}`, 'PATCH', {
       ...student,
       syncedAt: new Date().toISOString(),
     });

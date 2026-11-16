@@ -1,19 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Copy,
   Check,
   CheckCircle2,
   Phone,
-  QrCode,
   ArrowRight,
   ArrowLeft,
   ShieldCheck,
-  Smartphone,
-  ExternalLink,
-  Lock,
   Upload,
   MessageSquare,
+  UserPlus,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +26,7 @@ interface CheckoutModalProps {
   livePricing?: EffectivePackagePricing | null;
   siteSettings?: SiteSettings | null;
   onRemoveProduct: (productId: string) => void;
+  onOpenAuth?: (isRegister: boolean) => void;
   onPurchaseSuccess: (orderId: string) => void;
   isPage?: boolean;
 }
@@ -39,18 +37,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   selectedProducts,
   livePricing,
   siteSettings,
-  onRemoveProduct,
+  onOpenAuth,
   onPurchaseSuccess,
   isPage = false,
 }) => {
   const { student, loginStudent } = useAuth();
 
-  const [step, setStep] = useState<'details' | 'payment' | 'confirmed'>('details');
-
-  // Student Details
-  const [fullName, setFullName] = useState(student?.fullName || '');
-  const [email, setEmail] = useState(student?.email || '');
-  const [mobile, setMobile] = useState(student?.mobile || '');
+  const [step, setStep] = useState<'auth_required' | 'payment' | 'confirmed'>(() =>
+    student ? 'payment' : 'auth_required'
+  );
 
   // Payment Screenshot Verification (No Transaction ID required)
   const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState('');
@@ -58,7 +53,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [generatedOrderId, setGeneratedOrderId] = useState('');
+  const [generatedOrderId, setGeneratedOrderId] = useState(
+    () => `BCA-${Date.now().toString().slice(-6)}`
+  );
+
+  useEffect(() => {
+    if (step !== 'confirmed') {
+      setStep(student ? 'payment' : 'auth_required');
+    }
+  }, [student?.id, step]);
 
   if (!isOpen) return null;
 
@@ -106,44 +109,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const handleProceedToPayment = (e: React.FormEvent) => {
+  const activeName = student?.fullName?.trim() || 'BCA Student';
+  const activeMobile = (student?.mobile || '').replace(/\D/g, '');
+  const activeEmail =
+    (student?.email || '').trim().toLowerCase() ||
+    (activeMobile ? `${activeMobile}@student.bcastudypoint.com` : '');
+
+  const handleConfirmPaymentSubmission = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage('');
-
-    if (!fullName.trim() || fullName.trim().length < 2) {
-      setErrorMessage('দয়া করে আপনার সম্পূর্ণ নাম লিখুন।');
-      return;
-    }
-
-    const cleanMobile = mobile.replace(/\D/g, '');
-    if (cleanMobile.length < 10) {
-      setErrorMessage('দয়া করে সঠিক ১০ সংখ্যার মোবাইল নম্বর দিন।');
-      return;
-    }
+    if (isSubmitting || !student) return;
 
     if (selectedProducts.length === 0) {
       setErrorMessage('কমপক্ষে একটি বিষয় নির্বাচন করুন।');
       return;
     }
 
-    const orderRef = `BCA-${Date.now().toString().slice(-6)}`;
-    setGeneratedOrderId(orderRef);
-    setStep('payment');
-  };
-
-  const handleConfirmPaymentSubmission = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
-      const cleanMobile = mobile.replace(/\D/g, '');
-      const userEmail = email.trim() || `${cleanMobile}@student.bcastudypoint.com`;
       const fallbackOrderId = generatedOrderId || `ORD-${Date.now().toString().slice(-6)}`;
       let finalOrderId = fallbackOrderId;
-      let finalStudentId = student?.id || `std_${Date.now()}`;
+      let finalStudentId = student.id || `std_${Date.now()}`;
       const referenceNote = paymentScreenshotUrl
         ? 'Screenshot Uploaded'
         : 'WhatsApp Screenshot Verification';
@@ -158,9 +145,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // 1. Backend Order
       try {
         const orderRes = await api.createCheckoutOrder({
-          fullName: fullName.trim(),
-          email: userEmail.toLowerCase(),
-          mobile: cleanMobile,
+          fullName: activeName,
+          email: activeEmail,
+          mobile: activeMobile,
           selectedProductIds: selectedProducts.map((p) => p.id),
         });
         if (orderRes?.order?.orderId) {
@@ -183,9 +170,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const orderPayload = {
         orderId: finalOrderId,
         userId: finalStudentId,
-        studentName: fullName.trim(),
-        studentEmail: userEmail.toLowerCase(),
-        studentMobile: cleanMobile,
+        studentName: activeName,
+        studentEmail: activeEmail,
+        studentMobile: activeMobile,
         selectedProductIds: selectedProducts.map((p) => p.id),
         items: orderItems,
         totalAmount: totalPayable,
@@ -211,9 +198,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       // 4. Update student state
       loginStudent({
         id: finalStudentId,
-        fullName: fullName.trim(),
-        email: userEmail.toLowerCase(),
-        mobile: cleanMobile,
+        fullName: activeName,
+        email: activeEmail,
+        mobile: activeMobile,
       });
 
       setStep('confirmed');
@@ -226,7 +213,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   const whatsappUrl = `https://wa.me/91${WHATSAPP_PHONE}?text=${encodeURIComponent(
-    `Hello BCA STUDY POINT,\nI have paid ₹${totalPayable} for Order: ${generatedOrderId}\nStudent: ${fullName} (${mobile})\n\nPlease find my payment screenshot below to verify and activate my question banks.`
+    `Hello BCA STUDY POINT,\nI have paid ₹${totalPayable} for Order: ${generatedOrderId}\nStudent: ${activeName} (${activeMobile})\n\nPlease find my payment screenshot below to verify and activate my question banks.`
   )}`;
 
   const upiDeepLink = `upi://pay?pa=${OFFICIAL_UPI_ID}&pn=${encodeURIComponent(
@@ -277,7 +264,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 ? 'Order Placed Successfully!'
                 : step === 'payment'
                 ? 'Direct UPI Payment'
-                : 'Fast Checkout'}
+                : 'Registration Required'}
             </h2>
             <p className="text-[11px] text-[#FFE7A3]">
               {selectedProducts.length} Subject(s) · Total: ₹{totalPayable}
@@ -285,91 +272,42 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         </div>
 
-        {/* STEP 1: Details & Summary */}
-        {step === 'details' && (
-          <form onSubmit={handleProceedToPayment} className="space-y-3">
-            {errorMessage && (
-              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-200">
-                {errorMessage}
+        {/* STEP 1 (Fallback if reached without login): Prompt direct Registration / Login */}
+        {step === 'auth_required' && (
+          <div className="space-y-3 py-1">
+            <div className="bg-black/40 p-3.5 rounded-2xl border border-[#FFE7A3]/35 space-y-2 text-center">
+              <div className="w-11 h-11 rounded-full bg-[#FFD34E]/15 border border-[#FFD34E]/45 text-[#FFD34E] flex items-center justify-center mx-auto">
+                <UserPlus className="w-5 h-5" />
               </div>
-            )}
-
-            {/* Package Summary Strip */}
-            <div className="bg-black/40 p-2.5 rounded-xl border border-[#FFE7A3]/30 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-[10px] text-[#FFE7A3] uppercase font-bold block">
-                  Package ({packagePricing.totalPdfs} Subjects)
-                </span>
-                <span className="text-white font-bold text-xs">
-                  {packagePricing.combinationLabel}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="line-through text-white/40 text-[10px] mr-1.5">
-                  ₹{packagePricing.regularPrice}
-                </span>
-                <span className="text-[#FFD34E] font-black text-base">
-                  ₹{totalPayable}
-                </span>
-              </div>
+              <h3 className="text-sm font-black text-white">
+                আগে রেজিস্ট্রেশন বা লগইন করুন
+              </h3>
+              <p className="text-xs text-white/80 leading-relaxed">
+                অর্ডার করার আগে আপনার নাম, মোবাইল নম্বর ও ইমেইল আইডি দিয়ে একবার <strong className="text-[#FFD34E]">রেজিস্ট্রেশন</strong> করে নিন। এটি ফায়ারবেস ও লাইভ সার্ভারে সেভ থাকবে — পরে লগআউট হয়ে গেলেও শুধু <strong className="text-white">ইমেইল আইডি</strong> দিয়েই লগইন করতে পারবেন।
+              </p>
             </div>
 
-            {/* Student Contact Info */}
-            <div className="space-y-2.5">
-              <div>
-                <label className="block text-[11px] font-bold text-white mb-1">
-                  Student Name <span className="text-[#FFD34E]">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Rahul Sharma"
-                  className="w-full px-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-white mb-1">
-                  Mobile / WhatsApp Number <span className="text-[#FFD34E]">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  placeholder="9876543210"
-                  maxLength={10}
-                  className="w-full px-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-white mb-1">
-                  Email Address <span className="text-white/40 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@gmail.com"
-                  className="w-full px-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenAuth && onOpenAuth(true)}
+                className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4 stroke-[2.5]" />
+                <span>Register Now (নতুন অ্যাকাউন্ট)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenAuth && onOpenAuth(false)}
+                className="w-full py-2.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer"
+              >
+                ইতিমধ্যে অ্যাকাউন্ট আছে? Login করুন
+              </button>
             </div>
-
-            <button
-              type="submit"
-              className="btn-gold-primary w-full py-2.5 rounded-full text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 shadow-md cursor-pointer mt-3"
-            >
-              <span>Continue to Payment (₹{totalPayable})</span>
-              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-            </button>
-          </form>
+          </div>
         )}
 
-        {/* STEP 2: Simplified Essential Payment (No Transaction ID required — Screenshot based) */}
+        {/* STEP 2: Direct Payment (Student already registered/logged in) */}
         {step === 'payment' && (
           <form onSubmit={handleConfirmPaymentSubmission} className="space-y-3">
             {errorMessage && (
@@ -377,6 +315,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {errorMessage}
               </div>
             )}
+
+            {/* Compact Verified Student Strip */}
+            <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-emerald-400/35 flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-emerald-200 font-semibold truncate">
+                ✓ {activeName} · {activeMobile || activeEmail}
+              </span>
+              <span className="text-[10px] text-[#FFE7A3] font-bold shrink-0">
+                {packagePricing.totalPdfs} Subjects
+              </span>
+            </div>
 
             {/* Unified Compact Payment Card (Amount + BCA Study Point + PhonePe-style UPI Pay + QR) */}
             <div className="bg-gradient-to-b from-[#4B000B]/95 via-[#240005]/95 to-black/90 p-3.5 rounded-2xl border border-[#FFD34E]/45 shadow-xl space-y-2.5">
@@ -504,7 +452,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setStep('details')}
+                onClick={onClose}
                 className="py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 text-white text-xs font-bold cursor-pointer"
               >
                 Back

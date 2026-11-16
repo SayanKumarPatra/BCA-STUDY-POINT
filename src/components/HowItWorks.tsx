@@ -3,9 +3,9 @@ import React from 'react';
 export const HowItWorks: React.FC<{ title?: string }> = ({ title }) => {
   const steps = [
     { num: '1', text: 'Select your required BCA 3rd Semester subjects or specialization packs.' },
-    { num: '2', text: 'Enter your basic student details (Name, Mobile, Email).' },
-    { num: '3', text: 'Make payment quickly via UPI (GPay / PhonePe / Paytm) or Debit/Credit Card.' },
-    { num: '4', text: 'Instantly access and read your purchased question banks online.' },
+    { num: '2', text: 'Register once with your Name, WhatsApp/Mobile & Email ID (login anytime later with Email ID).' },
+    { num: '3', text: 'Pay safely via UPI (PhonePe / GPay / Paytm / QR) and send screenshot on WhatsApp.' },
+    { num: '4', text: 'Open My Notes to read your solved question banks online & download your receipt.' },
   ];
 
   return (

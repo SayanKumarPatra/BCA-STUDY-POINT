@@ -13,7 +13,11 @@ import {
 import { api, getStoredAdminKey, setStoredAdminKey } from '../services/api';
 import { BRAND } from '../constants/brand';
 import {
+  subscribeToBannersRealtime,
+  subscribeToOffersRealtime,
   subscribeToOrdersRealtime,
+  subscribeToProductsRealtime,
+  subscribeToSiteSettingsRealtime,
   syncAllOfficialProductsToFirestore,
   updateOrderStatusRealtime,
   deleteOrderRealtime,
@@ -190,10 +194,10 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
         api.getAdminCustomers(),
         api.getSemesters(),
         api.getProducts(),
-        api.getAdminBanners().catch(() => ({ banners: [] })),
-        api.getAdminPackages().catch(() => ({ packages: [], effectivePricing: null })),
-        api.getAdminOffers().catch(() => ({ offers: [], effectivePricing: null })),
-        api.getSiteSettings().catch(() => ({ siteSettings: null })),
+        api.getAdminBanners(),
+        api.getAdminPackages(),
+        api.getAdminOffers(),
+        api.getSiteSettings(),
         api.getAdminDevices(),
         api.getAdminAuditLogs(),
       ]);
@@ -242,8 +246,25 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
       });
     });
 
+    const unsubscribeBanners = subscribeToBannersRealtime((rtdbBanners) => {
+      if (rtdbBanners && rtdbBanners.length > 0) setBanners(rtdbBanners);
+    });
+    const unsubscribeOffers = subscribeToOffersRealtime((rtdbOffers) => {
+      if (rtdbOffers && rtdbOffers.length > 0) setOffers(rtdbOffers);
+    });
+    const unsubscribeSettings = subscribeToSiteSettingsRealtime((rtdbSettings) => {
+      if (rtdbSettings) setSiteSettings(rtdbSettings);
+    });
+    const unsubscribeProducts = subscribeToProductsRealtime((rtdbProducts) => {
+      if (rtdbProducts && rtdbProducts.length > 0) setProducts(rtdbProducts);
+    });
+
     return () => {
       unsubscribeOrders();
+      unsubscribeBanners();
+      unsubscribeOffers();
+      unsubscribeSettings();
+      unsubscribeProducts();
     };
   }, [isAuthenticated, loadAllData]);
 

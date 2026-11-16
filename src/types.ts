@@ -274,6 +274,9 @@ export interface CustomerSummary {
 export interface AdminDashboardStats {
   todaySales: number;
   todayRevenue: number;
+  todayOrders?: number;
+  todayPendingOrders?: number;
+  todayPendingRevenue?: number;
   filteredSales: number;
   filteredRevenue: number;
   totalOrders: number;

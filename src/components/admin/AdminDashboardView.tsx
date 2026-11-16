@@ -47,6 +47,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const s = stats || {
     todaySales: 0,
     todayRevenue: 0,
+    todayOrders: 0,
+    todayPendingOrders: 0,
+    todayPendingRevenue: 0,
     filteredSales: 0,
     filteredRevenue: 0,
     totalOrders: 0,
@@ -63,18 +66,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     salesSeries: [],
   };
 
+  const todayOrdersTotal = s.todayOrders ?? s.todaySales;
+  const todayPendingCount = s.todayPendingOrders ?? 0;
+  const todayPendingAmt = s.todayPendingRevenue ?? 0;
+
   const kpiCards = [
     {
       label: "Today's Sales",
       value: String(s.todaySales),
-      sub: `${s.filteredSales} in selected range`,
+      sub:
+        todayPendingCount > 0
+          ? `${todayOrdersTotal} ordered today (${todayPendingCount} pending)`
+          : `${todayOrdersTotal} ordered today · ${s.filteredSales} in range`,
       icon: ShoppingBag,
       tab: 'orders' as AdminNavTab,
     },
     {
       label: "Today's Revenue",
       value: formatInr(s.todayRevenue),
-      sub: `${formatInr(s.totalRevenue)} lifetime verified`,
+      sub:
+        todayPendingAmt > 0
+          ? `+ ${formatInr(todayPendingAmt)} pending approval today`
+          : `${formatInr(s.totalRevenue)} lifetime verified`,
       icon: IndianRupee,
       tab: 'reports' as AdminNavTab,
     },

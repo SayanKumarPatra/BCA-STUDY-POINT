@@ -850,6 +850,7 @@ class Database {
       student.lastLoginAt = new Date().toISOString();
       if (studentData.ip) student.lastIp = studentData.ip;
       this.persist();
+      firebaseSync.syncStudent(student).catch(() => {});
       return student;
     }
 
@@ -1379,6 +1380,7 @@ class Database {
     os?: string;
     browser?: string;
     ip?: string;
+    allowDeviceTransfer?: boolean;
   }): { success: boolean; device?: DeviceBinding; error?: string; message?: string; activeDevice?: any } {
     const clientIp = deviceData.ip || '127.0.0.1';
     const tokenHash = crypto.createHash('sha256').update(deviceData.deviceToken).digest('hex');
@@ -1400,19 +1402,32 @@ class Database {
         return { success: true, device: existing };
       }
 
-      // If a DIFFERENT device is already logged in and active
-      return {
-        success: false,
-        error: 'DEVICE_ALREADY_ACTIVE',
-        message: 'আপনার অ্যাকাউন্টটি ইতিমধ্যে অন্য একটি ডিভাইসে সক্রিয় রয়েছে (বর্তমানে লগইন আছে)। একটি অ্যাকাউন্টে একসাথে কেবল ১টি ডিভাইসে লগইন রাখা অনুমোদিত। অনুগ্রহ করে আপনার পূর্বের ডিভাইস থেকে লগআউট করুন, অথবা কলেজ অ্যাডমিনের সহায়তা নিন।',
-        activeDevice: {
-          deviceDescription: existing.deviceDescription,
-          os: existing.os,
-          browser: existing.browser,
-          lastSeenAt: existing.lastSeenAt,
-          registeredAt: existing.registeredAt,
-        },
-      };
+      if (deviceData.allowDeviceTransfer) {
+        // Transfer active session seamlessly to the new Desktop/Mobile device
+        for (const d of this.data.devices) {
+          if (d.userId === deviceData.userId && d.registrationStatus === 'active') {
+            d.registrationStatus = 'logged_out';
+            d.lastSeenAt = new Date().toISOString();
+          }
+        }
+        this.data.viewerSessions = this.data.viewerSessions.filter(
+          (s) => s.userId !== deviceData.userId
+        );
+      } else {
+        // If a DIFFERENT device is already logged in and active
+        return {
+          success: false,
+          error: 'DEVICE_ALREADY_ACTIVE',
+          message: 'আপনার অ্যাকাউন্টটি ইতিমধ্যে অন্য একটি ডিভাইসে সক্রিয় রয়েছে (বর্তমানে লগইন আছে)। একটি অ্যাকাউন্টে একসাথে কেবল ১টি ডিভাইসে লগইন রাখা অনুমোদিত। অনুগ্রহ করে আপনার পূর্বের ডিভাইস থেকে লগআউট করুন, অথবা কলেজ অ্যাডমিনের সহায়তা নিন।',
+          activeDevice: {
+            deviceDescription: existing.deviceDescription,
+            os: existing.os,
+            browser: existing.browser,
+            lastSeenAt: existing.lastSeenAt,
+            registeredAt: existing.registeredAt,
+          },
+        };
+      }
     }
 
     // No active device currently bound -> bind this device as active

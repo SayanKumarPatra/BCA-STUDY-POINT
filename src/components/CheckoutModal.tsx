@@ -378,76 +378,81 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             )}
 
-            {/* Total Amount Card */}
-            <div className="p-3 bg-gradient-to-r from-[#65000D] to-[#3D0009] rounded-xl border border-[#FFD34E]/40 flex items-center justify-between shadow-sm">
-              <div>
-                <span className="text-[10px] text-[#FFE7A3] font-bold block uppercase tracking-wider">
-                  Amount to Pay
-                </span>
-                <span className="text-2xl font-black text-[#FFD34E] tabular-nums">
-                  ₹{totalPayable}
-                </span>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFD34E]/20 text-[#FFE7A3] border border-[#FFD34E]/40">
-                Order #{generatedOrderId}
-              </span>
-            </div>
-
-            {/* UPI ID + QR Row */}
-            <div className="bg-black/40 p-3 rounded-xl border border-white/10 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="text-[10px] text-white/50 block font-medium">Official UPI ID:</span>
-                  <code className="text-xs font-mono font-bold text-[#FFD34E] truncate block">
-                    {OFFICIAL_UPI_ID}
-                  </code>
+            {/* Unified Compact Payment Card (Amount + BCA Study Point + PhonePe-style UPI Pay + QR) */}
+            <div className="bg-gradient-to-b from-[#4B000B]/95 via-[#240005]/95 to-black/90 p-3.5 rounded-2xl border border-[#FFD34E]/45 shadow-xl space-y-2.5">
+              {/* Top Row: Amount + Fixed Official Name */}
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/10">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[11px] text-[#FFE7A3]/80 font-bold">Total:</span>
+                  <span className="text-2xl font-black text-[#FFD34E] tabular-nums leading-none">
+                    ₹{totalPayable}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyUpi}
-                  className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
-                >
-                  {copiedUpi ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
-                </button>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-[#FFD34E]/15 text-[#FFE7A3] border border-[#FFD34E]/40">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>BCA Study Point</span>
+                </span>
               </div>
 
-              {/* QR Code & Mobile Deep Link */}
-              <div className="flex items-center gap-3 pt-2 border-t border-white/10">
-                <div className="w-20 h-20 bg-white p-1 rounded-lg shrink-0 shadow">
+              {/* Official PhonePe-Style UPI Pay CTA Button */}
+              <a
+                href={upiDeepLink}
+                className="group flex items-center justify-between gap-3 w-full px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#5F259F] via-[#6B2FB3] to-[#511D8B] hover:brightness-110 active:scale-[0.99] text-white border border-white/25 shadow-[0_6px_22px_rgba(95,37,159,0.5)] transition-all"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-white text-[#5F259F] flex items-center justify-center shrink-0 font-black text-base shadow-sm">
+                    ₹
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className="text-sm font-black tracking-tight leading-tight">
+                      Pay ₹{totalPayable} Now
+                    </div>
+                    <div className="text-[10px] font-semibold text-white/85 truncate">
+                      PhonePe · GPay · Paytm · BHIM UPI
+                    </div>
+                  </div>
+                </div>
+                <div className="px-2.5 py-1 rounded-lg bg-white/15 group-hover:bg-white/25 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors">
+                  <span>Pay</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </a>
+
+              {/* Compact QR + Copy UPI Row */}
+              <div className="pt-2 border-t border-white/10 flex items-center gap-2.5">
+                <div className="w-14 h-14 bg-white p-1 rounded-lg shrink-0 shadow">
                   <img
                     src={OFFICIAL_QR_CODE}
                     alt="Scan UPI QR"
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <div className="text-[11px] text-white/80 space-y-1">
-                  <p className="font-semibold text-white">Google Pay / PhonePe / Paytm:</p>
-                  <p className="text-[10px] text-white/60">
-                    Scan the QR or copy the UPI ID to complete your payment of ₹{totalPayable}.
-                  </p>
-                  <a
-                    href={upiDeepLink}
-                    className="inline-flex items-center gap-1 text-[10px] font-bold text-[#FFD34E] hover:underline"
-                  >
-                    <span>Open in UPI App ↗</span>
-                  </a>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="block text-[10px] text-white/65 font-medium">
+                    Scan QR বা UPI ID কপি করে পেমেন্ট করুন
+                  </span>
+                  <div className="flex items-center justify-between gap-1.5 bg-black/50 px-2 py-1 rounded-lg border border-white/15">
+                    <code className="text-[10px] font-mono font-bold text-[#FFD34E] truncate">
+                      {OFFICIAL_UPI_ID}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={handleCopyUpi}
+                      className="px-2 py-0.5 bg-white/15 hover:bg-white/25 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      {copiedUpi ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Screenshot Instructions + Optional Upload (No Transaction ID required) */}
-            <div className="bg-black/40 p-3 rounded-xl border border-[#FFE7A3]/25 space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="block text-[11px] font-bold text-[#FFE7A3]">
-                    পেমেন্ট স্ক্রিনশট ভেরিফিকেশন
-                  </span>
-                  <p className="text-[10px] text-white/75 mt-0.5 leading-relaxed">
-                    কোনো Transaction ID লাগবে না। পেমেন্ট হয়ে গেলে নিচে স্ক্রিনশট আপলোড করুন অথবা সরাসরি WhatsApp-এ (<strong>{WHATSAPP_PHONE}</strong>) স্ক্রিনশট পাঠিয়ে দিন।
-                  </p>
-                </div>
-              </div>
+            {/* Compact Screenshot Upload / WhatsApp Verification */}
+            <div className="bg-black/40 p-2.5 rounded-xl border border-[#FFE7A3]/25 space-y-2">
+              <p className="text-[10px] text-white/80 leading-snug">
+                <strong className="text-[#FFE7A3]">স্ক্রিনশট ভেরিফিকেশন:</strong> পেমেন্ট শেষে নিচে স্ক্রিনশট দিন অথবা WhatsApp (<strong>{WHATSAPP_PHONE}</strong>)-এ পাঠান।
+              </p>
 
               <div className="flex flex-wrap items-center gap-2">
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 border border-white/20 text-white cursor-pointer">

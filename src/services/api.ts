@@ -217,6 +217,19 @@ export const api = {
   },
 
   // --- Student Authentication ---
+  async studentAccess(payload: {
+    fullName: string;
+    email: string;
+    mobile: string;
+    deviceInfo?: any;
+  }): Promise<{ success: boolean; student: any; error?: string; message?: string; activeDevice?: any }> {
+    return safeFetchJson('/api/auth/student-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  },
+
   async studentRegister(payload: {
     fullName: string;
     email: string;

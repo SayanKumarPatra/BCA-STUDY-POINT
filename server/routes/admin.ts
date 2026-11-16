@@ -185,11 +185,31 @@ adminRouter.get('/stats', requireAdmin, async (req, res) => {
       (o) => o.paymentStatus === 'rejected' || o.paymentStatus === 'failed'
     );
 
-    const todayVerified = verifiedOrders.filter((o) => toIstDateKey(o.createdAt) === todayKey);
+    const todayOrdersList = orders.filter(
+      (o) =>
+        o.paymentStatus !== 'rejected' &&
+        o.paymentStatus !== 'failed' &&
+        toIstDateKey(o.createdAt) === todayKey
+    );
+    const todayOrders = todayOrdersList.length;
+    const todayPendingList = todayOrdersList.filter((o) => o.paymentStatus === 'pending');
+    const todayPendingOrders = todayPendingList.length;
+    const todayPendingRevenue = todayPendingList.reduce(
+      (sum, o) => sum + (Number(o.totalAmount) || 0),
+      0
+    );
+
+    const todayVerified = verifiedOrders.filter(
+      (o) =>
+        toIstDateKey(o.createdAt) === todayKey ||
+        (o.verifiedAt ? toIstDateKey(o.verifiedAt) === todayKey : false)
+    );
     const todaySales = todayVerified.length;
     const todayRevenue = todayVerified.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
-    const filteredVerified = verifiedOrders.filter((o) => matches(o.createdAt));
+    const filteredVerified = verifiedOrders.filter(
+      (o) => matches(o.createdAt) || (o.verifiedAt ? matches(o.verifiedAt) : false)
+    );
     const filteredSales = filteredVerified.length;
     const filteredRevenue = filteredVerified.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
@@ -205,15 +225,16 @@ adminRouter.get('/stats', requireAdmin, async (req, res) => {
       .getOffers()
       .filter((o) => db.isOfferCurrentlyValid(o).isValid).length;
 
-    // Build real date-grouped series from actual verified/all orders
+    // Build real date-grouped series from actual verified orders using IST (Asia/Kolkata)
     const seriesMap = new Map<string, { date: string; label: string; sales: number; revenue: number }>();
     const seriesSource = range === 'today' ? verifiedOrders : filteredVerified;
     for (const ord of seriesSource) {
-      const dateKey = toIstDateKey(ord.createdAt);
+      const dateKey = toIstDateKey(ord.verifiedAt || ord.createdAt) || toIstDateKey(ord.createdAt);
       if (!dateKey) continue;
       const existing = seriesMap.get(dateKey) || {
         date: dateKey,
-        label: new Date(`${dateKey}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+        label: new Date(`${dateKey}T12:00:00+05:30`).toLocaleDateString('en-IN', {
+          timeZone: 'Asia/Kolkata',
           day: 'numeric',
           month: 'short',
         }),
@@ -233,6 +254,9 @@ adminRouter.get('/stats', requireAdmin, async (req, res) => {
       stats: {
         todaySales,
         todayRevenue,
+        todayOrders,
+        todayPendingOrders,
+        todayPendingRevenue,
         filteredSales,
         filteredRevenue,
         totalOrders: orders.length,
@@ -810,9 +834,12 @@ adminRouter.get('/orders', requireAdmin, async (req, res) => {
   }
 });
 
-adminRouter.post('/orders/:orderId/approve', requireAdmin, (req, res) => {
+adminRouter.post('/orders/:orderId/approve', requireAdmin, async (req, res) => {
   try {
     const { orderId } = req.params;
+    if (!db.getOrder(orderId)) {
+      await db.syncWithFirebaseOrders().catch(() => {});
+    }
     const result = db.approveOrder(orderId, 'admin');
     if (!result.success) {
       return res.status(404).json({ success: false, error: result.error });
@@ -827,10 +854,13 @@ adminRouter.post('/orders/:orderId/approve', requireAdmin, (req, res) => {
   }
 });
 
-adminRouter.post('/orders/:orderId/reject', requireAdmin, (req, res) => {
+adminRouter.post('/orders/:orderId/reject', requireAdmin, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { reason } = req.body || {};
+    if (!db.getOrder(orderId)) {
+      await db.syncWithFirebaseOrders().catch(() => {});
+    }
     const result = db.rejectOrder(orderId, 'admin', reason);
     if (!result.success) {
       return res.status(404).json({ success: false, error: result.error });

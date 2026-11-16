@@ -94,6 +94,17 @@ const TAB_TITLES: Record<AdminNavTab, { title: string; subtitle: string }> = {
   },
 };
 
+const toIstDateKeyClient = (isoOrDate: string | Date): string => {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+};
+
 export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(Boolean(getStoredAdminKey()));
   const [loginInput, setLoginInput] = useState('');
@@ -104,13 +115,13 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
   const [activeTab, setActiveTab] = useState<AdminNavTab>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Global Date Filter
+  // Global Date Filter (IST Asia/Kolkata)
   const [dateRange, setDateRange] = useState<DateRangePreset>('today');
   const [customStartDate, setCustomStartDate] = useState<string>(() =>
-    new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+    toIstDateKeyClient(new Date(Date.now() - 7 * 86400000))
   );
   const [customEndDate, setCustomEndDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+    toIstDateKeyClient(new Date())
   );
 
   // Real Backend + RTDB Data State
@@ -260,12 +271,21 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
 
   const handleApproveOrder = async (orderId: string) => {
     try {
+      const nowIso = new Date().toISOString();
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.orderId === orderId
+            ? { ...o, paymentStatus: 'verified', verifiedAt: o.verifiedAt || nowIso }
+            : o
+        )
+      );
       await updateOrderStatusRealtime(orderId, 'verified');
       await api.approveOrder(orderId);
       notify(`Order ${orderId} verified and student PDF access activated.`);
       loadAllData();
     } catch (err: any) {
       notify(err.message || 'Failed to approve order', true);
+      loadAllData();
     }
   };
 
@@ -273,6 +293,13 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     if (!rejectingOrder) return;
     setIsSubmittingReject(true);
     try {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.orderId === rejectingOrder.orderId
+            ? { ...o, paymentStatus: 'rejected', rejectionReason: reason }
+            : o
+        )
+      );
       await updateOrderStatusRealtime(rejectingOrder.orderId, 'rejected', {
         rejectionReason: reason,
       });
@@ -282,6 +309,7 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
       loadAllData();
     } catch (err: any) {
       notify(err.message || 'Failed to reject order', true);
+      loadAllData();
     } finally {
       setIsSubmittingReject(false);
     }
@@ -378,6 +406,133 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
     () => orders.filter((o) => o.paymentStatus === 'pending'),
     [orders]
   );
+
+  // Reconcile backend stats with live in-memory orders (from API + Firebase RTDB) in IST
+  // so Today's Sales, Today's Orders & Today's Revenue update instantaneously without lag or stale zeros
+  const effectiveStats = useMemo<AdminDashboardStats>(() => {
+    const base: AdminDashboardStats = stats || {
+      todaySales: 0,
+      todayRevenue: 0,
+      todayOrders: 0,
+      todayPendingOrders: 0,
+      todayPendingRevenue: 0,
+      filteredSales: 0,
+      filteredRevenue: 0,
+      totalOrders: 0,
+      verifiedOrders: 0,
+      pendingOrders: 0,
+      rejectedOrders: 0,
+      totalRevenue: 0,
+      totalCustomers: 0,
+      totalStudents: 0,
+      totalSubjects: products.length,
+      publishedSubjects: products.filter((p) => p.published).length,
+      activeOffersCount: offers.filter((o) => o.active).length,
+      activeDevices: devices.filter((d) => d.registrationStatus === 'active').length,
+      salesSeries: [],
+    };
+
+    if (orders.length === 0) return base;
+
+    const now = new Date();
+    const todayKey = toIstDateKeyClient(now);
+    const yesterdayKey = toIstDateKeyClient(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    const sevenDaysAgoKey = toIstDateKeyClient(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
+    const monthPrefix = todayKey.slice(0, 7);
+
+    const matchesRange = (iso?: string): boolean => {
+      if (!iso) return false;
+      const key = toIstDateKeyClient(iso);
+      if (!key) return false;
+      switch (dateRange) {
+        case 'today':
+          return key === todayKey;
+        case 'yesterday':
+          return key === yesterdayKey;
+        case '7days':
+          return key >= sevenDaysAgoKey && key <= todayKey;
+        case 'month':
+          return key.startsWith(monthPrefix);
+        case 'custom':
+          return key >= (customStartDate || '0000-00-00') && key <= (customEndDate || '9999-12-31');
+        case 'all':
+        default:
+          return true;
+      }
+    };
+
+    const verifiedList = orders.filter((o) => o.paymentStatus === 'verified');
+    const pendingList = orders.filter((o) => o.paymentStatus === 'pending');
+    const rejectedList = orders.filter(
+      (o) => o.paymentStatus === 'rejected' || o.paymentStatus === 'failed'
+    );
+
+    const todayOrdersList = orders.filter(
+      (o) =>
+        o.paymentStatus !== 'rejected' &&
+        o.paymentStatus !== 'failed' &&
+        toIstDateKeyClient(o.createdAt) === todayKey
+    );
+    const todayPendingList = todayOrdersList.filter((o) => o.paymentStatus === 'pending');
+
+    const todayVerifiedList = verifiedList.filter(
+      (o) =>
+        toIstDateKeyClient(o.createdAt) === todayKey ||
+        (o.verifiedAt ? toIstDateKeyClient(o.verifiedAt) === todayKey : false)
+    );
+    const filteredVerifiedList = verifiedList.filter(
+      (o) => matchesRange(o.createdAt) || (o.verifiedAt ? matchesRange(o.verifiedAt) : false)
+    );
+
+    const seriesMap = new Map<string, { date: string; label: string; sales: number; revenue: number }>();
+    const seriesSource = dateRange === 'today' ? verifiedList : filteredVerifiedList;
+    for (const ord of seriesSource) {
+      const dk = toIstDateKeyClient(ord.verifiedAt || ord.createdAt) || toIstDateKeyClient(ord.createdAt);
+      if (!dk) continue;
+      const existing = seriesMap.get(dk) || {
+        date: dk,
+        label: new Date(`${dk}T12:00:00+05:30`).toLocaleDateString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          day: 'numeric',
+          month: 'short',
+        }),
+        sales: 0,
+        revenue: 0,
+      };
+      existing.sales += 1;
+      existing.revenue += Number(ord.totalAmount) || 0;
+      seriesMap.set(dk, existing);
+    }
+
+    const salesSeries = Array.from(seriesMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-14);
+
+    return {
+      ...base,
+      todaySales: todayVerifiedList.length,
+      todayRevenue: todayVerifiedList.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+      todayOrders: todayOrdersList.length,
+      todayPendingOrders: todayPendingList.length,
+      todayPendingRevenue: todayPendingList.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+      filteredSales: filteredVerifiedList.length,
+      filteredRevenue: filteredVerifiedList.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+      totalOrders: orders.length,
+      verifiedOrders: verifiedList.length,
+      pendingOrders: pendingList.length,
+      rejectedOrders: rejectedList.length,
+      totalRevenue: verifiedList.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0),
+      totalCustomers: customers.length > 0 ? customers.length : base.totalCustomers,
+      totalSubjects: products.length > 0 ? products.length : base.totalSubjects,
+      publishedSubjects:
+        products.length > 0 ? products.filter((p) => p.published).length : base.publishedSubjects,
+      activeDevices:
+        devices.length > 0
+          ? devices.filter((d) => d.registrationStatus === 'active').length
+          : base.activeDevices,
+      salesSeries,
+    };
+  }, [stats, orders, customers, products, offers, devices, dateRange, customStartDate, customEndDate]);
 
   // Quick global search match
   const quickMatchResults = useMemo(() => {
@@ -636,7 +791,7 @@ export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
         <main className="flex-1 min-w-0 p-3 sm:p-5 lg:p-6 max-w-[1680px] w-full mx-auto">
           {activeTab === 'dashboard' && (
             <AdminDashboardView
-              stats={stats}
+              stats={effectiveStats}
               pendingOrders={pendingOrders}
               dateRange={dateRange}
               customStartDate={customStartDate}

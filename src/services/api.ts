@@ -207,10 +207,15 @@ export const api = {
   async uploadCheckoutScreenshot(file: File): Promise<{ success: boolean; imageUrl: string }> {
     const formData = new FormData();
     formData.append('screenshot', file);
-    return safeFetchJson('/api/checkout/upload-screenshot', {
-      method: 'POST',
-      body: formData,
-    });
+    try {
+      return await safeFetchJson('/api/checkout/upload-screenshot', {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      const imageUrl = await fileToCompressedDataUrl(file);
+      return { success: true, imageUrl };
+    }
   },
 
   async verifyPayment(payload: {

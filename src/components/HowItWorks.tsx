@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const HowItWorks: React.FC = () => {
+export const HowItWorks: React.FC<{ title?: string }> = ({ title }) => {
   const steps = [
     { num: '1', text: 'Select your required BCA 3rd Semester subjects or specialization packs.' },
     { num: '2', text: 'Enter your basic student details (Name, Mobile, Email).' },
@@ -12,7 +12,7 @@ export const HowItWorks: React.FC = () => {
     <section id="how-it-works" className="py-2.5 px-3 sm:px-6 max-w-2xl mx-auto text-left">
       <h3 className="text-xs sm:text-sm font-black text-[#FFE7A3] tracking-wide mb-2 flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#FFD34E]" />
-        How It Works
+        {title || 'How It Works'}
       </h3>
 
       {/* Simple 1, 2, 3, 4 Points Listed Directly Beneath Each Other (No cards!) */}

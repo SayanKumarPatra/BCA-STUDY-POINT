@@ -20,8 +20,8 @@ export interface Product {
   subjectName: string; // e.g. "Programming in C & Data Types"
   description: string;
   syllabusHighlights: string[];
-  price: number; // in INR (e.g. 149)
-  originalPrice?: number; // e.g. 299
+  price: number; // Selling price in INR
+  originalPrice?: number; // Regular price / MRP in INR
   pageCount: number;
   privateStoragePath: string; // e.g. "pdfs/bca_101_c_programming.pdf"
   fileSizeKb: number;
@@ -30,6 +30,7 @@ export interface Product {
   coverImageUrl?: string;
   imageUrl?: string;
   paperType?: 'core' | 'specialization';
+  specialization?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,11 +67,13 @@ export interface Order {
   studentId?: string;
   selectedProductIds: string[];
   items: OrderItem[];
+  packageName?: string;
   totalAmount: number;
   paymentGatewayOrderId?: string;
   paymentGatewayPaymentId?: string;
   paymentGatewaySignature?: string;
   paymentReference?: string;
+  paymentScreenshotUrl?: string;
   paymentStatus: 'pending' | 'verified' | 'failed' | 'cancelled' | 'rejected';
   paymentMethod?: string;
   createdAt: string;
@@ -127,6 +130,169 @@ export interface AdminAuditLog {
   details: string;
   timestamp: string;
   ipAddress?: string;
+}
+
+export interface BannerSlide {
+  id: string;
+  title: string;
+  heading?: string;
+  subtitle?: string;
+  description?: string;
+  buttonText?: string;
+  buttonLink?: string;
+  imageUrl: string;
+  alt: string;
+  order: number;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PackageDefinition {
+  id: string;
+  name: string;
+  description: string;
+  compulsoryProductIds: string[];
+  languageProductIds: string[];
+  specializationProductIds: string[];
+  coreRegularPrice: number;
+  coreOfferPrice: number;
+  languageRegularPrice: number;
+  languageOfferPrice: number;
+  specializationRegularPrice: number;
+  specializationOfferPrice: number;
+  fullPackageRegularPrice: number;
+  fullPackageOfferPrice: number;
+  active: boolean;
+  updatedAt: string;
+}
+
+export interface OfferConfig {
+  id: string;
+  title: string;
+  badgeText: string;
+  bannerText: string;
+  description: string;
+  regularPrice: number;
+  offerPrice: number;
+  discountPercent: number;
+  startDate: string;
+  expiryDate: string;
+  active: boolean;
+  isFullPackageOffer?: boolean;
+  updatedAt: string;
+}
+
+export interface SiteSettings {
+  tagline: string;
+  announcement: {
+    enabled: boolean;
+    text: string;
+    link: string;
+  };
+  homepage: {
+    sectionBadge: string;
+    sectionTitle: string;
+    editionLabel: string;
+    compulsoryNotice: string;
+    optionalNotice: string;
+    howItWorksTitle: string;
+    featuredProductIds: string[];
+  };
+  payment: {
+    upiId: string;
+    qrCodeUrl: string;
+    primaryPhone: string;
+    whatsappPhone: string;
+  };
+  updatedAt: string;
+}
+
+export interface EffectivePackagePricing {
+  packageName: string;
+  packageDescription: string;
+  packageActive: boolean;
+  compulsoryProductIds: string[];
+  languageProductIds: string[];
+  specializationProductIds: string[];
+  offerActive: boolean;
+  offerExpired: boolean;
+  offerTitle: string;
+  offerBadgeText: string;
+  offerExpiryDate: string;
+  core: {
+    title: string;
+    pdfCount: number;
+    launchPrice: number;
+    regularPrice: number;
+  };
+  language: {
+    title: string;
+    pdfCount: number;
+    launchPrice: number;
+    regularPrice: number;
+  };
+  specialization: {
+    title: string;
+    pdfCount: number;
+    launchPrice: number;
+    regularPrice: number;
+  };
+  fullPackageOfferPrice: number;
+  fullPackageRegularPrice: number;
+}
+
+export interface CustomerPurchasedSubject {
+  productId: string;
+  subjectCode: string;
+  subjectName: string;
+  price: number;
+  accessStatus: string;
+}
+
+export interface CustomerSummary {
+  customerId: string;
+  fullName: string;
+  mobile: string;
+  email: string;
+  collegeName?: string;
+  registeredAt: string | null;
+  lastLoginAt: string | null;
+  purchasedSubjectCount: number;
+  purchasedProductNames: string[];
+  purchasedProducts: CustomerPurchasedSubject[];
+  purchasedPackageNames: string[];
+  totalAmountSpent: number;
+  totalOrders: number;
+  verifiedOrdersCount: number;
+  pendingOrdersCount: number;
+  lastPurchaseDate: string | null;
+  orderHistory: Order[];
+  deviceInfo: DeviceBinding | null;
+}
+
+export interface AdminDashboardStats {
+  todaySales: number;
+  todayRevenue: number;
+  filteredSales: number;
+  filteredRevenue: number;
+  totalOrders: number;
+  verifiedOrders: number;
+  pendingOrders: number;
+  rejectedOrders: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  totalStudents: number;
+  totalSubjects: number;
+  publishedSubjects: number;
+  activeOffersCount: number;
+  activeDevices: number;
+  salesSeries: Array<{
+    date: string;
+    label: string;
+    sales: number;
+    revenue: number;
+  }>;
 }
 
 export type AppView = 'catalog' | 'purchased' | 'admin' | 'auth' | 'checkout' | 'about' | 'contact';

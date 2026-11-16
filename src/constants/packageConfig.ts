@@ -1,4 +1,4 @@
-import type { Product } from '../types';
+import type { EffectivePackagePricing } from '../types';
 
 export const CORE_SUBJECT_IDS = [
   'prod-bca-maj3',
@@ -72,56 +72,72 @@ export interface PackageCalculationResult {
   regularPrice: number;
   totalSavings: number;
   combinationLabel: string;
+  offerActive: boolean;
+  offerExpired: boolean;
 }
 
 /**
- * Calculates official package pricing based on selected product IDs.
- * Strictly enforces:
- * - 4 Core Subjects: ₹69 launch, ₹99 regular
- * - Language Add-on: +₹10 launch, +₹15 regular
- * - Specialization Add-on: +₹20 launch, +₹35 regular
- *
- * Combinations:
- * 1. Main Package Only (4 PDFs): ₹69 (Regular ₹99, Save ₹30)
- * 2. Main + Language (5 PDFs): ₹79 (Regular ₹114, Save ₹35)
- * 3. Main + Specialization (5 PDFs): ₹89 (Regular ₹134, Save ₹45)
- * 4. Main + Language + Specialization (6 PDFs): ₹99 (Regular ₹149, Save ₹50)
+ * Calculates live package pricing based on selected product IDs and dynamic Admin pricing/offer config.
+ * Automatically applies regular price if the active offer has expired or been deactivated.
  */
-export function calculatePackagePrice(productIds: string[]): PackageCalculationResult {
+export function calculatePackagePrice(
+  productIds: string[],
+  liveConfig?: EffectivePackagePricing | null
+): PackageCalculationResult {
+  const coreIds: readonly string[] =
+    liveConfig?.compulsoryProductIds?.length ? liveConfig.compulsoryProductIds : CORE_SUBJECT_IDS;
+  const langIds: readonly string[] =
+    liveConfig?.languageProductIds?.length ? liveConfig.languageProductIds : LANGUAGE_SUBJECT_IDS;
+  const specIds: readonly string[] =
+    liveConfig?.specializationProductIds?.length
+      ? liveConfig.specializationProductIds
+      : SPECIALIZATION_SUBJECT_IDS;
+
+  const corePricing = liveConfig?.core || PACKAGE_PRICING.core;
+  const langPricing = liveConfig?.language || PACKAGE_PRICING.language;
+  const specPricing = liveConfig?.specialization || PACKAGE_PRICING.specialization;
+
+  const offerActive = liveConfig ? liveConfig.offerActive : true;
+  const offerExpired = liveConfig ? liveConfig.offerExpired : false;
+
   const currentSet = new Set(productIds);
 
-  const selectedLanguageId =
-    LANGUAGE_SUBJECT_IDS.find((id) => currentSet.has(id)) || null;
+  const selectedLanguageId = langIds.find((id) => currentSet.has(id)) || null;
+  const selectedSpecializationId = specIds.find((id) => currentSet.has(id)) || null;
 
-  const selectedSpecializationId =
-    SPECIALIZATION_SUBJECT_IDS.find((id) => currentSet.has(id)) || null;
-
-  // Compulsory 4 Core subjects are always included
-  const finalProductIds: string[] = [...CORE_SUBJECT_IDS];
+  const finalProductIds: string[] = [...coreIds];
   if (selectedLanguageId) finalProductIds.push(selectedLanguageId);
   if (selectedSpecializationId) finalProductIds.push(selectedSpecializationId);
 
-  let launchOfferPrice = PACKAGE_PRICING.core.launchPrice; // 69
-  let regularPrice = PACKAGE_PRICING.core.regularPrice; // 99
-  let totalPdfs = 4;
+  let launchOfferPrice = offerActive ? corePricing.launchPrice : corePricing.regularPrice;
+  let regularPrice = corePricing.regularPrice;
+  let totalPdfs = coreIds.length;
 
   if (selectedLanguageId) {
-    launchOfferPrice += PACKAGE_PRICING.language.launchPrice; // +10
-    regularPrice += PACKAGE_PRICING.language.regularPrice; // +15
+    launchOfferPrice += offerActive ? langPricing.launchPrice : langPricing.regularPrice;
+    regularPrice += langPricing.regularPrice;
     totalPdfs += 1;
   }
 
   if (selectedSpecializationId) {
-    launchOfferPrice += PACKAGE_PRICING.specialization.launchPrice; // +20
-    regularPrice += PACKAGE_PRICING.specialization.regularPrice; // +35
+    launchOfferPrice += offerActive ? specPricing.launchPrice : specPricing.regularPrice;
+    regularPrice += specPricing.regularPrice;
     totalPdfs += 1;
   }
 
-  const totalSavings = regularPrice - launchOfferPrice;
+  // If Complete Full Package is selected and liveConfig specifies fullPackageOfferPrice, use it
+  if (selectedLanguageId && selectedSpecializationId && liveConfig) {
+    regularPrice = liveConfig.fullPackageRegularPrice || regularPrice;
+    launchOfferPrice = offerActive
+      ? liveConfig.fullPackageOfferPrice || launchOfferPrice
+      : regularPrice;
+  }
+
+  const totalSavings = Math.max(0, regularPrice - launchOfferPrice);
 
   let combinationLabel = 'Main Core Package';
   if (selectedLanguageId && selectedSpecializationId) {
-    combinationLabel = 'Main + Language + Specialization (Complete Pack)';
+    combinationLabel = liveConfig?.packageName || 'Main + Language + Specialization (Complete Pack)';
   } else if (selectedLanguageId) {
     combinationLabel = 'Main + Language Add-on';
   } else if (selectedSpecializationId) {
@@ -138,6 +154,8 @@ export function calculatePackagePrice(productIds: string[]): PackageCalculationR
     regularPrice,
     totalSavings,
     combinationLabel,
+    offerActive,
+    offerExpired,
   };
 }
 

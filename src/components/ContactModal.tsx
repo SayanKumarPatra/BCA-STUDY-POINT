@@ -2,14 +2,28 @@ import React from 'react';
 import { X, Phone, MessageSquare, Clock, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { BRAND } from '../constants/brand';
 
+import type { SiteSettings } from '../types';
+
 interface ContactModalProps {
   isOpen: boolean;
   onClose: () => void;
   isPage?: boolean;
+  siteSettings?: SiteSettings | null;
 }
 
-export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose, isPage = false }) => {
+export const ContactModal: React.FC<ContactModalProps> = ({
+  isOpen,
+  onClose,
+  isPage = false,
+  siteSettings,
+}) => {
   if (!isOpen) return null;
+
+  const supportPhone =
+    siteSettings?.payment?.whatsappPhone ||
+    siteSettings?.payment?.primaryPhone ||
+    BRAND.payment?.whatsappPhone ||
+    '8145775413';
 
   return (
     <div
@@ -57,9 +71,11 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose, isP
         </p>
 
         <div className="space-y-2.5 text-xs">
-          {/* WhatsApp Support (9382040746) */}
+          {/* Official WhatsApp Support */}
           <a
-            href="https://wa.me/919382040746?text=Hello%20BCA%20Study%20Point%2C%20I%20need%20help%20with%20my%20order"
+            href={`https://wa.me/91${supportPhone}?text=${encodeURIComponent(
+              'Hello BCA Study Point, I need help with my order'
+            )}`}
             target="_blank"
             rel="noopener noreferrer"
             className="p-3 bg-emerald-950/50 hover:bg-emerald-950/80 rounded-2xl border border-emerald-500/40 flex items-center justify-between gap-3 transition-colors cursor-pointer group"
@@ -70,7 +86,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose, isP
               </div>
               <div>
                 <span className="font-extrabold text-white block">Official WhatsApp (Chat)</span>
-                <span className="text-xs text-emerald-300 font-mono font-bold">9382040746</span>
+                <span className="text-xs text-emerald-300 font-mono font-bold">{supportPhone}</span>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold group-hover:bg-emerald-500 group-hover:text-black transition-colors">
@@ -78,9 +94,9 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose, isP
             </span>
           </a>
 
-          {/* Primary Call Helpline (8145775413) */}
+          {/* Primary Call Helpline */}
           <a
-            href="tel:8145775413"
+            href={`tel:${supportPhone}`}
             className="p-3 bg-black/40 hover:bg-black/60 rounded-2xl border border-[#FFE7A3]/30 flex items-center justify-between gap-3 transition-colors cursor-pointer group"
           >
             <div className="flex items-center gap-2.5">
@@ -89,7 +105,7 @@ export const ContactModal: React.FC<ContactModalProps> = ({ isOpen, onClose, isP
               </div>
               <div>
                 <span className="font-extrabold text-white block">Helpline / Direct Call</span>
-                <span className="text-xs text-[#FFD34E] font-mono font-bold">8145775413</span>
+                <span className="text-xs text-[#FFD34E] font-mono font-bold">{supportPhone}</span>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full bg-[#FFD34E]/20 text-[#FFD34E] text-[10px] font-bold group-hover:bg-[#FFD34E] group-hover:text-[#3D0009] transition-colors">

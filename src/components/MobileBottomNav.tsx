@@ -7,6 +7,7 @@ interface MobileBottomNavProps {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
   selectedCount: number;
+  whatsappPhone?: string;
   onOpenCart: () => void;
   onOpenAuth: () => void;
 }
@@ -15,6 +16,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentView,
   setCurrentView,
   selectedCount,
+  whatsappPhone = '8145775413',
   onOpenCart,
   onOpenAuth,
 }) => {
@@ -65,7 +67,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
       {/* 3. Direct WhatsApp Support Tab */}
       <a
-        href="https://wa.me/919382040746?text=Hello%20BCA%20Study%20Point%20Support"
+        href={`https://wa.me/91${whatsappPhone}?text=Hello%20BCA%20Study%20Point%20Support`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex flex-col items-center py-1 px-2.5 rounded-xl text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer relative"

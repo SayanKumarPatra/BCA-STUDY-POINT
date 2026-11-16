@@ -11,7 +11,7 @@ export const BRAND = {
     upiId: 'BHARATPE2D0I0H4R5P81095@unitype',
     qrCodeUrl: '/assets/aistudio/WhatsApp_Image_2026-11-10_at_7.58.34_PM_43197c9f.jpeg',
     primaryPhone: '8145775413',
-    whatsappPhone: '9382040746',
+    whatsappPhone: '8145775413',
   },
   colors: {
     burgundyDeep: '#65000D',

@@ -54,11 +54,14 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupActiveQuery, setLookupActiveQuery] = useState('');
 
+  const [hasLoadedLiveOrders, setHasLoadedLiveOrders] = useState(false);
+
   // 1. Subscribe to Firebase Realtime Database for all live orders
   useEffect(() => {
     const unsubscribe = subscribeToOrdersRealtime(
       (orders) => {
         setAllRtdbOrders(orders || []);
+        setHasLoadedLiveOrders(true);
       },
       (err) => {
         console.warn('PurchasedContent RTDB orders notice:', err);
@@ -77,7 +80,10 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
 
     try {
       const data = await api.getStudentPurchases(queryId);
-      if (data?.orders) setApiOrders(data.orders);
+      if (data?.orders) {
+        setApiOrders(data.orders);
+        setHasLoadedLiveOrders(true);
+      }
       if (data?.purchases) setApiPurchases(data.purchases);
     } catch (err: any) {
       if (!silent) {
@@ -99,22 +105,20 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
     return () => clearInterval(interval);
   }, [student?.id, student?.email, student?.mobile, lookupActiveQuery]);
 
-  // Read cached last order from localStorage
+  // Read cached last order from localStorage ONLY as initial fallback before live sync completes
   const lastOrderId = typeof window !== 'undefined' ? localStorage.getItem('bca_last_order_id') || '' : '';
   const localCachedOrders: Order[] = useMemo(() => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined' || hasLoadedLiveOrders) return [];
     try {
       return JSON.parse(localStorage.getItem('bca_orders') || '[]');
     } catch {
       return [];
     }
-  }, []);
+  }, [hasLoadedLiveOrders]);
 
-  // 3. Merge and match orders for this student
+  // 3. Merge and match orders for this student (live backend + RTDB are authoritative)
   const matchedOrders: Order[] = useMemo(() => {
     const map = new Map<string, Order>();
-
-    // Combine all sources: Firebase RTDB, API orders, and localStorage
     const combined = [...allRtdbOrders, ...apiOrders, ...localCachedOrders];
 
     const cleanStudentEmail = (student?.email || '').toLowerCase().trim();
@@ -136,8 +140,8 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
       if (cleanStudentEmail && ordEmail === cleanStudentEmail) isMatch = true;
       if (cleanStudentMobile && cleanStudentMobile.length >= 10 && ordMobileDigits === cleanStudentMobile) isMatch = true;
 
-      // Match by last ordered ID on this device
-      if (lastOrderId && ordId === lastOrderId.toUpperCase()) isMatch = true;
+      // Guest checkout fallback before login completes
+      if (!student && lastOrderId && ordId === lastOrderId.toUpperCase()) isMatch = true;
 
       // Match by active search lookup
       if (cleanLookup) {
@@ -221,6 +225,46 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
     () => matchedOrders.filter((o) => o.paymentStatus === 'pending').length,
     [matchedOrders]
   );
+
+  const verifiedOrders = useMemo(
+    () => matchedOrders.filter((o) => o.paymentStatus === 'verified'),
+    [matchedOrders]
+  );
+
+  // Consolidated all-in-one receipt only offered if student placed multiple separate verified orders
+  const consolidatedVerifiedReceipt: Order | null = useMemo(() => {
+    if (verifiedOrders.length <= 1) return null;
+    const itemMap = new Map<string, any>();
+    for (const ord of verifiedOrders) {
+      const list =
+        ord.items && ord.items.length > 0
+          ? ord.items
+          : (ord.selectedProductIds || []).map((id) => {
+              const fb = FALLBACK_PRODUCTS.find((p) => p.id === id);
+              return {
+                productId: id,
+                subjectCode: fb?.subjectCode || 'BCA',
+                subjectName: fb?.subjectName || 'Question Bank',
+                price: fb?.price || 20,
+              };
+            });
+      for (const it of list) {
+        if (!itemMap.has(it.productId)) {
+          itemMap.set(it.productId, it);
+        }
+      }
+    }
+    const latest = verifiedOrders[0];
+    return {
+      ...latest,
+      orderId: `ALL-${verifiedOrders.length}ORD-${latest.orderId.slice(-6)}`,
+      items: Array.from(itemMap.values()),
+      selectedProductIds: Array.from(itemMap.keys()),
+      packageName: `Combined Receipt (${verifiedOrders.length} Purchases)`,
+      totalAmount: verifiedOrders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0),
+      paymentReference: verifiedOrders.map((o) => o.orderId).join(', '),
+    };
+  }, [verifiedOrders]);
 
   const hasAnyItems = matchedOrders.length > 0 || resolvedPurchases.length > 0;
 
@@ -408,7 +452,7 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
             <a
-              href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '9382040746'}?text=${encodeURIComponent(
+              href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '8145775413'}?text=${encodeURIComponent(
                 'Hello BCA STUDY POINT, I completed payment but need assistance accessing my study materials.'
               )}`}
               target="_blank"
@@ -546,7 +590,7 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
                               <span>অনুমোদনের অপেক্ষায়</span>
                             </button>
                             <a
-                              href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '9382040746'}?text=${encodeURIComponent(
+                              href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '8145775413'}?text=${encodeURIComponent(
                                 `Hello BCA STUDY POINT,\nPlease activate access for ${item.subjectCode} under order ${item.orderId}.`
                               )}`}
                               target="_blank"
@@ -568,24 +612,37 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
         </div>
       ) : (
         /* ========================================================================= */
-        /* TAB 2: DEDICATED PAYMENT HISTORY & OFFICIAL RECEIPTS OPTION (User Request) */
+        /* TAB 2: DEDICATED PAYMENT HISTORY & OFFICIAL RECEIPTS OPTION               */
         /* ========================================================================= */
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs font-bold text-[#FFE7A3] px-1">
-            <span className="flex items-center gap-1.5 text-sm font-black text-white">
-              <CreditCard className="w-4 h-4 text-[#FFD34E]" />
-              <span>আপনার সমস্ত পেমেন্ট হিস্ট্রি ও অফিশিয়াল রসিদ ({matchedOrders.length})</span>
-            </span>
-            <span className="text-[11px] text-white/60">
-              যেকোনো অর্ডারের পাশে 'রসিদ দেখুন' বাটনে ক্লিক করে মানি রসিদ ডাউনলোড করতে পারবেন
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#FFE7A3] px-1">
+            <div>
+              <span className="flex items-center gap-1.5 text-sm font-black text-white">
+                <CreditCard className="w-4 h-4 text-[#FFD34E]" />
+                <span>আপনার পেমেন্ট হিস্ট্রি ও অফিশিয়াল রসিদ ({matchedOrders.length})</span>
+              </span>
+              <span className="text-[11px] text-white/60 block mt-0.5">
+                প্রতিটি অনুমোদিত পারচেজের জন্য সব বিষয়সহ ১টি একক মানি রসিদ তৈরি হয়।
+              </span>
+            </div>
+
+            {consolidatedVerifiedReceipt && (
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptOrder(consolidatedVerifiedReceipt)}
+                className="btn-gold-primary px-4 py-2 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>সকল পারচেজের ১টি একত্রিত রসিদ</span>
+              </button>
+            )}
           </div>
 
           <div className="space-y-3.5">
             {matchedOrders.map((ord) => {
               const isVerified = ord.paymentStatus === 'verified';
               const isFailed = ord.paymentStatus === 'rejected' || ord.paymentStatus === 'failed';
-              const cleanUtr = (ord.paymentReference || '').replace('upi_', '');
+              const cleanRef = (ord.paymentReference || '').replace(/^upi_/i, '');
 
               return (
                 <div
@@ -620,9 +677,9 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
                         <span>
                           Paid Amount: <strong className="text-[#FFD34E] font-black text-sm">₹{ord.totalAmount}</strong>
                         </span>
-                        {cleanUtr && (
+                        {cleanRef && (
                           <span>
-                            UTR: <strong className="font-mono text-[11px] bg-black/40 px-1.5 py-0.5 rounded text-white">{cleanUtr}</strong>
+                            Ref: <strong className="font-mono text-[11px] bg-black/40 px-1.5 py-0.5 rounded text-white">{cleanRef}</strong>
                           </span>
                         )}
                         {ord.studentMobile && (
@@ -679,30 +736,34 @@ export const PurchasedContent: React.FC<PurchasedContentProps> = ({
                     )}
                   </div>
 
-                  {/* Actions Row: View Receipt Modal Button & WhatsApp Help */}
+                  {/* Actions Row: Official Receipt only for Verified Orders */}
                   <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-[11px] text-white/70">
                       {isVerified ? (
-                        <span className="text-emerald-300">✓ পেমেন্ট অনুমোদিত হয়েছে। অফিশিয়াল রসিদ সংগ্রহ করতে পারেন।</span>
+                        <span className="text-emerald-300">✓ পেমেন্ট অনুমোদিত হয়েছে। সমস্ত বিষয়ের ১টি একক রসিদ সংগ্রহ করুন।</span>
+                      ) : isFailed ? (
+                        <span className="text-rose-300">✕ এই অর্ডারটি বাতিল করা হয়েছে।</span>
                       ) : (
-                        <span className="text-amber-200">⏳ অ্যাডমিন পেমেন্ট যাচাই করছেন (১০-২০ মিনিট সময় লাগতে পারে)।</span>
+                        <span className="text-amber-200">⏳ অ্যাডমিন পেমেন্ট যাচাই করছেন। অনুমোদনের পর অফিশিয়াল রসিদ পাবেন।</span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* VIEW & PRINT RECEIPT BUTTON (Official Cash Memo Modal) */}
-                      <button
-                        onClick={() => setSelectedReceiptOrder(ord)}
-                        className="btn-gold-primary px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 transition-transform"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>রসিদ দেখুন / Receipt</span>
-                      </button>
+                      {isVerified && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceiptOrder(ord)}
+                          className="btn-gold-primary px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 transition-transform"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>রসিদ দেখুন / Receipt</span>
+                        </button>
+                      )}
 
                       {/* WhatsApp Help */}
                       <a
-                        href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '9382040746'}?text=${encodeURIComponent(
-                          `Hello BCA STUDY POINT,\nInquiry about Order ${ord.orderId} (₹${ord.totalAmount}).\nUTR: ${cleanUtr || 'N/A'}\nStudent Name: ${ord.studentName || 'Student'}`
+                        href={`https://wa.me/91${BRAND.payment?.whatsappPhone || '8145775413'}?text=${encodeURIComponent(
+                          `Hello BCA STUDY POINT,\nInquiry about Order ${ord.orderId} (₹${ord.totalAmount}).\nRef: ${cleanRef || 'Screenshot'}\nStudent Name: ${ord.studentName || 'Student'}`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"

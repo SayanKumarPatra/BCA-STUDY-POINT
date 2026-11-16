@@ -8,6 +8,7 @@ interface NavbarProps {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
   selectedCount: number;
+  tagline?: string;
   onOpenCart: () => void;
   onOpenAuth: (isRegister?: boolean) => void;
   onOpenContact: () => void;
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   setCurrentView,
   selectedCount,
+  tagline,
   onOpenCart,
   onOpenAuth,
   onOpenContact,
@@ -59,7 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               BCA STUDY POINT
             </span>
             <span className="hidden sm:inline text-[10px] font-semibold text-[#FFE7A3] tracking-wider">
-              {BRAND.tagline}
+              {tagline || BRAND.tagline}
             </span>
           </div>
         </div>

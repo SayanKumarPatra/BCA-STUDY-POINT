@@ -35,7 +35,7 @@
       "coverImageUrl": "/assets/aistudio/Computer_Architecture__BCA_Study_Point_18218658.png",
       "imageUrl": "/assets/aistudio/Computer_Architecture__BCA_Study_Point_18218658.png",
       "createdAt": "2026-11-10T00:00:00.000Z",
-      "updatedAt": "2026-11-10T00:00:00.000Z"
+      "updatedAt": "2026-11-16T07:03:32.951Z"
     },
     {
       "id": "prod-bca-min3",
@@ -315,9 +315,108 @@
       "registeredAt": "2026-11-11T09:58:49.305Z",
       "lastLoginAt": "2026-11-11T09:58:49.305Z",
       "lastIp": "127.0.0.1"
+    },
+    {
+      "id": "Hpp59JxMCtRx6S3jIKzfWELKHgE2",
+      "email": "jalchak12@gmail.com",
+      "fullName": "Jishu Bera",
+      "mobile": "9382050588",
+      "registeredAt": "2026-11-16T06:24:22.609Z",
+      "lastLoginAt": "2026-11-16T06:24:55.895Z"
+    },
+    {
+      "id": "std-1794469695563-oc0jk",
+      "email": "alloneuse1@gmail.com",
+      "fullName": "All One",
+      "mobile": "",
+      "registeredAt": "2026-11-12T07:48:15.563Z",
+      "lastLoginAt": "2026-11-12T07:48:15.563Z"
+    },
+    {
+      "id": "std-1794813338716-wdzi6",
+      "email": "verify_check@example.com",
+      "fullName": "Verify Flow Check",
+      "mobile": "9999999999",
+      "collegeName": "Test College",
+      "registeredAt": "2026-11-16T07:15:38.716Z",
+      "lastLoginAt": "2026-11-16T07:15:38.716Z",
+      "lastIp": "127.0.0.1"
+    },
+    {
+      "id": "std-1794813914898-7hd8o",
+      "email": "sayankumarpatra2006@gmail.com",
+      "fullName": "fdffff",
+      "mobile": "1155444555",
+      "registeredAt": "2026-11-16T07:25:14.898Z",
+      "lastLoginAt": "2026-11-16T07:25:14.898Z"
     }
   ],
   "orders": [
+    {
+      "orderId": "ORD-202611-0D254A",
+      "userId": "std-1794813914898-7hd8o",
+      "studentName": "fdffff",
+      "studentEmail": "sayankumarpatra2006@gmail.com",
+      "studentMobile": "1155444555",
+      "collegeName": "",
+      "studentId": "",
+      "selectedProductIds": [
+        "prod-bca-aec3-bengali",
+        "prod-bca-maj3",
+        "prod-bca-mdc3",
+        "prod-bca-min3",
+        "prod-bca-sec3",
+        "prod-spec-ai"
+      ],
+      "items": [
+        {
+          "price": 20,
+          "productId": "prod-bca-aec3-bengali",
+          "subjectCode": "AEC-3 (BEN)",
+          "subjectName": "BENGALI AEC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-maj3",
+          "subjectCode": "MAJ-3",
+          "subjectName": "COMPUTER ARCHITECTURE MAJ-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-mdc3",
+          "subjectCode": "MDC-3",
+          "subjectName": "BUSNIESS ETHICS & CSR MDC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-min3",
+          "subjectCode": "MIN-3",
+          "subjectName": "BUSINESS ENVIRONMENT MIN-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-bca-sec3",
+          "subjectCode": "SEC-3",
+          "subjectName": "ADVANCED DATABASES SYSTEMS SEC-3"
+        },
+        {
+          "price": 20,
+          "productId": "prod-spec-ai",
+          "subjectCode": "SPEC-AI",
+          "subjectName": "ARTIFICIAL INTELLIGENCE (AI)"
+        }
+      ],
+      "totalAmount": 99,
+      "paymentStatus": "verified",
+      "paymentReference": "Screenshot Uploaded",
+      "paymentGatewayOrderId": "upi_ORD-202611-0D254A_1794813914899",
+      "paymentGatewayPaymentId": "",
+      "paymentGatewaySignature": "",
+      "ipAddress": "42.108.145.34, 169.254.169.126",
+      "userAgent": "",
+      "createdAt": "2026-11-16T07:25:14.899Z",
+      "verifiedAt": "2026-11-16T07:25:47.571Z"
+    },
     {
       "orderId": "ORD-202611-297909",
       "userId": "std-1794391129305-ies3l",
@@ -369,10 +468,11 @@
       ],
       "totalAmount": 99,
       "paymentGatewayOrderId": "upi_ORD-202611-5E67A5_1794390641976",
-      "paymentStatus": "pending",
+      "paymentStatus": "verified",
       "createdAt": "2026-11-11T09:50:41.976Z",
       "ipAddress": "127.0.0.1",
-      "paymentReference": "123456789012"
+      "paymentReference": "123456789012",
+      "verifiedAt": "2026-11-16T06:43:51.995Z"
     },
     {
       "orderId": "ORD-202611-A769BC",
@@ -437,7 +537,7 @@
       "userId": "std-1794377226218-rb16k",
       "productId": "prod-bca-maj3",
       "orderId": "ORD-202611-5E67A5",
-      "accessStatus": "pending_approval",
+      "accessStatus": "active",
       "createdAt": "2026-11-11T06:07:22.730Z"
     },
     {
@@ -471,6 +571,54 @@
       "orderId": "ORD-202611-297909",
       "accessStatus": "active",
       "createdAt": "2026-11-11T09:58:49.328Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-ktlf",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-bca-aec3-bengali",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-1hfy",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-bca-maj3",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-zomp",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-bca-mdc3",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-d8ey",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-bca-min3",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-8jjb",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-bca-sec3",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
+    },
+    {
+      "purchaseId": "pur-1794813969380-zxlr",
+      "userId": "std-1794813914898-7hd8o",
+      "productId": "prod-spec-ai",
+      "orderId": "ORD-202611-0D254A",
+      "accessStatus": "active",
+      "createdAt": "2026-11-16T07:25:14.899Z"
     }
   ],
   "devices": [
@@ -505,6 +653,126 @@
     }
   ],
   "adminAuditLogs": [
+    {
+      "adminId": "admin",
+      "action": "DELETE_CUSTOMER",
+      "targetId": "nonexistent_probe",
+      "targetType": "STUDENT",
+      "details": "Permanently deleted customer \"nonexistent_probe\" (0 order(s) removed, all PDF access & device bindings revoked).",
+      "id": "log-1794814970499-2epn",
+      "timestamp": "2026-11-16T07:42:50.499Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "DELETE_CUSTOMER",
+      "targetId": "std-1794814170772-nc576",
+      "targetType": "STUDENT",
+      "details": "Permanently deleted customer \"Temp Fake Customer\" (1 order(s) removed, all PDF access & device bindings revoked).",
+      "id": "log-1794814171192-edj8",
+      "timestamp": "2026-11-16T07:29:31.192Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "APPROVE_ORDER",
+      "targetId": "ORD-202611-34DA86",
+      "targetType": "ORDER",
+      "details": "Approved payment for order ORD-202611-34DA86 (Temp Fake Customer, ₹20). Full PDF access granted for 1 subjects.",
+      "id": "log-1794814170780-6jq3",
+      "timestamp": "2026-11-16T07:29:30.780Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "UPDATE_OFFER",
+      "targetId": "offer-launch-99",
+      "targetType": "OFFER",
+      "details": "Updated offer \"Special Launch Offer\" (₹99 / Regular ₹149, Active: true, Expiry: 2027-03-31T23:59:59.000Z)",
+      "id": "log-1794814065993-d8v8",
+      "timestamp": "2026-11-16T07:27:45.993Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "UPDATE_OFFER",
+      "targetId": "offer-launch-99",
+      "targetType": "OFFER",
+      "details": "Updated offer \"Special Launch Offer\" (₹99 / Regular ₹149, Active: false, Expiry: 2027-03-31T23:59:59.000Z)",
+      "id": "log-1794814042713-y3sq",
+      "timestamp": "2026-11-16T07:27:22.713Z"
+    },
+    {
+      "adminId": "admin_session",
+      "action": "ADMIN_LOGIN",
+      "details": "Administrator logged into management console.",
+      "id": "log-1794814036996-w75l",
+      "timestamp": "2026-11-16T07:27:16.996Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "UPDATE_PACKAGE",
+      "targetId": "pkg-bca-sem3-full",
+      "targetType": "PACKAGE",
+      "details": "Updated package \"BCA 3rd Semester Complete Study Package\" (Core ₹69/₹99, Full ₹99/₹149, Active: false)",
+      "id": "log-1794814023774-wt7b",
+      "timestamp": "2026-11-16T07:27:03.774Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "DELETE_ORDER",
+      "targetId": "ORD-202611-C57C5C",
+      "targetType": "ORDER",
+      "details": "Deleted order ORD-202611-C57C5C (Verify Flow Check, ₹20) and associated access records.",
+      "id": "log-1794813358818-akdw",
+      "timestamp": "2026-11-16T07:15:58.818Z"
+    },
+    {
+      "adminId": "payment-submission",
+      "action": "PAYMENT_SUBMITTED_FOR_VERIFICATION",
+      "targetId": "ORD-202611-C57C5C",
+      "targetType": "ORDER",
+      "details": "Payment submitted ₹20 by Verify Flow Check (verify_check@example.com). Method: WhatsApp Screenshot Verification. Awaiting Admin verification before unlocking access.",
+      "id": "log-1794813338729-09vw",
+      "timestamp": "2026-11-16T07:15:38.729Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "DELETE_ORDER",
+      "targetId": "BCA-199535",
+      "targetType": "ORDER",
+      "details": "Deleted order BCA-199535 (Jishu Bera, ₹99) and associated access records.",
+      "id": "log-1794812898444-68g2",
+      "timestamp": "2026-11-16T07:08:18.444Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "UPDATE_SUBJECT",
+      "targetId": "prod-bca-maj3",
+      "targetType": "PRODUCT",
+      "details": "Updated subject MAJ-3 (Price: ₹20, Regular: ₹49, Published: true)",
+      "id": "log-1794812612952-fkxo",
+      "timestamp": "2026-11-16T07:03:32.952Z"
+    },
+    {
+      "adminId": "admin",
+      "action": "UPDATE_SUBJECT",
+      "targetId": "prod-bca-maj3",
+      "targetType": "PRODUCT",
+      "details": "Updated subject MAJ-3 (Price: ₹45, Regular: ₹49, Published: true)",
+      "id": "log-1794812612942-mldy",
+      "timestamp": "2026-11-16T07:03:32.942Z"
+    },
+    {
+      "adminId": "admin_session",
+      "action": "ADMIN_LOGIN",
+      "details": "Administrator logged into management console.",
+      "id": "log-1794812612921-muhe",
+      "timestamp": "2026-11-16T07:03:32.921Z"
+    },
+    {
+      "adminId": "admin_session",
+      "action": "ADMIN_LOGIN",
+      "details": "Administrator logged into management console.",
+      "id": "log-1794812599830-sie3",
+      "timestamp": "2026-11-16T07:03:19.830Z"
+    },
     {
       "adminId": "admin",
       "action": "APPROVE_ORDER",
@@ -587,5 +855,132 @@
       "details": "Database updated with 11 real official university Question Bank PDFs and verified page counts.",
       "timestamp": "2026-11-10T21:45:00.000Z"
     }
-  ]
+  ],
+  "banners": [
+    {
+      "id": "banner-welcome",
+      "title": "Welcome to BCA STUDY POINT - Your Complete Exam Preparation Partner",
+      "heading": "",
+      "subtitle": "",
+      "description": "",
+      "buttonText": "",
+      "buttonLink": "#packages-pricing",
+      "imageUrl": "/assets/aistudio/Welcome_to_BCA_Study_Point_005ca426.png",
+      "alt": "Welcome to BCA STUDY POINT - Smart Study Materials for BCA Students: Notes, Question Bank, PYQ, Video Explanation, Practice Sets",
+      "order": 1,
+      "active": true,
+      "createdAt": "2026-11-10T00:00:00.000Z",
+      "updatedAt": "2026-11-10T00:00:00.000Z"
+    },
+    {
+      "id": "banner-launch-offer",
+      "title": "Special Launch Offer - BCA 3rd Semester Complete Study Package at ₹99 Only",
+      "heading": "",
+      "subtitle": "",
+      "description": "",
+      "buttonText": "",
+      "buttonLink": "#packages-pricing",
+      "imageUrl": "/assets/aistudio/BCA_3rd_Semester_Launch_Offer_b41d8881.png",
+      "alt": "Special Launch Offer - BCA 3rd Semester Complete Study Package at ₹99 Only (Regular ₹199) - Limited Time Offer",
+      "order": 2,
+      "active": true,
+      "createdAt": "2026-11-10T00:00:00.000Z",
+      "updatedAt": "2026-11-10T00:00:00.000Z"
+    },
+    {
+      "id": "banner-benefits-policies",
+      "title": "Our Benefits & Policies - What You Get & How We Work",
+      "heading": "",
+      "subtitle": "",
+      "description": "",
+      "buttonText": "",
+      "buttonLink": "#packages-pricing",
+      "imageUrl": "/assets/aistudio/BCA_Study_Point_Benefits___Policies_6c4db866.png",
+      "alt": "Our Benefits & Policies - Key Benefits and Policy Guidelines for BCA Students",
+      "order": 3,
+      "active": true,
+      "createdAt": "2026-11-10T00:00:00.000Z",
+      "updatedAt": "2026-11-10T00:00:00.000Z"
+    }
+  ],
+  "packages": [
+    {
+      "id": "pkg-bca-sem3-full",
+      "name": "BCA 3rd Semester Complete Study Package",
+      "description": "Includes 4 Compulsory Core Subjects + Optional Language Add-on + Optional Specialization Paper.",
+      "compulsoryProductIds": [
+        "prod-bca-maj3",
+        "prod-bca-min3",
+        "prod-bca-mdc3",
+        "prod-bca-sec3"
+      ],
+      "languageProductIds": [
+        "prod-bca-aec3-bengali",
+        "prod-bca-aec3-sanskrit"
+      ],
+      "specializationProductIds": [
+        "prod-spec-ds",
+        "prod-spec-ai",
+        "prod-spec-cs",
+        "prod-spec-ml",
+        "prod-spec-iot"
+      ],
+      "coreRegularPrice": 99,
+      "coreOfferPrice": 69,
+      "languageRegularPrice": 15,
+      "languageOfferPrice": 10,
+      "specializationRegularPrice": 35,
+      "specializationOfferPrice": 20,
+      "fullPackageRegularPrice": 149,
+      "fullPackageOfferPrice": 99,
+      "active": false,
+      "updatedAt": "2026-11-16T07:27:45.992Z"
+    }
+  ],
+  "offers": [
+    {
+      "id": "offer-launch-99",
+      "title": "Special Launch Offer",
+      "badgeText": "Up to 34% OFF",
+      "bannerText": "BCA 3rd Semester Complete Study Package at ₹99 Only",
+      "description": "4 Compulsory Core + 1 Language + 1 Specialization complete exam question bank bundle.",
+      "regularPrice": 149,
+      "offerPrice": 99,
+      "discountPercent": 34,
+      "startDate": "2026-11-01T00:00:00.000Z",
+      "expiryDate": "2027-03-31T23:59:59.000Z",
+      "active": true,
+      "isFullPackageOffer": true,
+      "updatedAt": "2026-11-16T07:27:45.992Z"
+    }
+  ],
+  "siteSettings": {
+    "tagline": "Your Exam Preparation Partner",
+    "announcement": {
+      "enabled": false,
+      "text": "🔥 BCA 3rd Semester Complete Study Package Launch Offer: Get all 6 Subjects at ₹99 Only!",
+      "link": "#packages-pricing"
+    },
+    "homepage": {
+      "sectionBadge": "BCA 3rd Semester · Solved Question Banks",
+      "sectionTitle": "Package Selection & Pricing",
+      "editionLabel": "2024-2025 Edition",
+      "compulsoryNotice": "Students must select all 4 compulsory subjects.",
+      "optionalNotice": "2 additional optional sections are available. Students can choose them according to their preference.",
+      "howItWorksTitle": "How It Works",
+      "featuredProductIds": [
+        "prod-bca-maj3",
+        "prod-bca-min3",
+        "prod-bca-mdc3",
+        "prod-bca-sec3"
+      ]
+    },
+    "payment": {
+      "upiId": "BHARATPE2D0I0H4R5P81095@unitype",
+      "qrCodeUrl": "/assets/aistudio/WhatsApp_Image_2026-11-10_at_7.58.34_PM_43197c9f.jpeg",
+      "primaryPhone": "8145775413",
+      "whatsappPhone": "8145775413"
+    },
+    "updatedAt": "2026-11-10T00:00:00.000Z"
+  }
 }

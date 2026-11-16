@@ -2,9 +2,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { db, PDF_STORAGE_DIR } from '../db';
+import { db, PDF_STORAGE_DIR, PUBLIC_UPLOADS_DIR } from '../db';
 import { pdfService } from '../pdfService';
-import { requireAdmin, ADMIN_SECRET_KEY, isValidAdminKey, type AuthenticatedRequest } from '../authMiddleware';
+import { ADMIN_SECRET_KEY, isValidAdminKey, requireAdmin } from '../authMiddleware';
 
 export const adminRouter = Router();
 
@@ -35,9 +35,89 @@ const upload = multer({
   },
 });
 
+// Configure multer for public image uploads (banners, product covers, QR codes)
+const imageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(PUBLIC_UPLOADS_DIR)) {
+      fs.mkdirSync(PUBLIC_UPLOADS_DIR, { recursive: true });
+    }
+    cb(null, PUBLIC_UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `img_${Date.now()}_${safeName}`);
+  },
+});
+
+const imageUpload = multer({
+  storage: imageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype.startsWith('image/') ||
+      /\.(png|jpe?g|webp|gif|svg)$/i.test(file.originalname)
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only valid image files (PNG, JPG, WEBP, SVG) are allowed.'));
+    }
+  },
+});
+
+/**
+ * Helper: format a timestamp to IST (Asia/Kolkata) YYYY-MM-DD
+ */
+function toIstDateKey(isoOrDate: string | Date): string {
+  const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+function getDateRangeBounds(range: string, startDate?: string, endDate?: string) {
+  const now = new Date();
+  const todayKey = toIstDateKey(now);
+
+  const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayKey = toIstDateKey(yesterdayDate);
+
+  const sevenDaysAgoKey = toIstDateKey(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000));
+  const monthPrefix = todayKey.slice(0, 7); // YYYY-MM
+
+  return {
+    todayKey,
+    matches: (iso: string): boolean => {
+      const key = toIstDateKey(iso);
+      if (!key) return false;
+      switch (range) {
+        case 'today':
+          return key === todayKey;
+        case 'yesterday':
+          return key === yesterdayKey;
+        case '7days':
+          return key >= sevenDaysAgoKey && key <= todayKey;
+        case 'month':
+          return key.startsWith(monthPrefix);
+        case 'custom': {
+          const from = startDate || '0000-00-00';
+          const to = endDate || '9999-12-31';
+          return key >= from && key <= to;
+        }
+        case 'all':
+        default:
+          return true;
+      }
+    },
+  };
+}
+
 /**
  * POST /api/admin/login
- * Verify admin credentials
+ * Verify admin credentials (preserved untouched)
  */
 adminRouter.post('/login', (req, res) => {
   const { secretKey } = req.body;
@@ -62,33 +142,215 @@ adminRouter.post('/login', (req, res) => {
 });
 
 /**
- * GET /api/admin/stats
- * Dashboard overview metrics
+ * POST /api/admin/upload-image
+ * Upload banner, product thumbnail, or QR image to persistent server uploads directory
  */
-adminRouter.get('/stats', requireAdmin, (req, res) => {
+adminRouter.post('/upload-image', requireAdmin, imageUpload.single('image'), (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No image file uploaded.' });
+    }
+    const imageUrl = `/uploads/${path.basename(req.file.path)}`;
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'UPLOAD_IMAGE',
+      details: `Uploaded asset ${req.file.originalname} -> ${imageUrl}`,
+    });
+    res.json({ success: true, imageUrl });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/stats
+ * Dashboard overview metrics with real date filtering & real sales series
+ */
+adminRouter.get('/stats', requireAdmin, async (req, res) => {
+  try {
+    await Promise.all([
+      db.syncWithFirebaseOrders().catch(() => {}),
+      db.syncWithFirebaseStudents().catch(() => {}),
+    ]);
+
+    const range = (req.query.range as string) || 'today';
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+    const { todayKey, matches } = getDateRangeBounds(range, startDate, endDate);
+
     const orders = db.getOrders();
     const verifiedOrders = orders.filter((o) => o.paymentStatus === 'verified');
-    const totalRevenue = verifiedOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+    const pendingOrders = orders.filter((o) => o.paymentStatus === 'pending');
+    const rejectedOrders = orders.filter(
+      (o) => o.paymentStatus === 'rejected' || o.paymentStatus === 'failed'
+    );
+
+    const todayVerified = verifiedOrders.filter((o) => toIstDateKey(o.createdAt) === todayKey);
+    const todaySales = todayVerified.length;
+    const todayRevenue = todayVerified.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+    const filteredVerified = verifiedOrders.filter((o) => matches(o.createdAt));
+    const filteredSales = filteredVerified.length;
+    const filteredRevenue = filteredVerified.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+    const totalRevenue = verifiedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+    const customers = db.getCustomersSummary();
     const students = db.getStudents();
     const products = db.getProducts();
     const publishedProducts = products.filter((p) => p.published);
     const devices = db.getDevices();
     const activeDevices = devices.filter((d) => d.registrationStatus === 'active');
+    const activeOffersCount = db
+      .getOffers()
+      .filter((o) => db.isOfferCurrentlyValid(o).isValid).length;
+
+    // Build real date-grouped series from actual verified/all orders
+    const seriesMap = new Map<string, { date: string; label: string; sales: number; revenue: number }>();
+    const seriesSource = range === 'today' ? verifiedOrders : filteredVerified;
+    for (const ord of seriesSource) {
+      const dateKey = toIstDateKey(ord.createdAt);
+      if (!dateKey) continue;
+      const existing = seriesMap.get(dateKey) || {
+        date: dateKey,
+        label: new Date(`${dateKey}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+        }),
+        sales: 0,
+        revenue: 0,
+      };
+      existing.sales += 1;
+      existing.revenue += Number(ord.totalAmount) || 0;
+      seriesMap.set(dateKey, existing);
+    }
+    const salesSeries = Array.from(seriesMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-14);
 
     res.json({
       success: true,
       stats: {
+        todaySales,
+        todayRevenue,
+        filteredSales,
+        filteredRevenue,
         totalOrders: orders.length,
         verifiedOrders: verifiedOrders.length,
+        pendingOrders: pendingOrders.length,
+        rejectedOrders: rejectedOrders.length,
         totalRevenue,
+        totalCustomers: customers.length,
         totalStudents: students.length,
         totalSubjects: products.length,
         publishedSubjects: publishedProducts.length,
+        activeOffersCount,
         activeDevices: activeDevices.length,
+        salesSeries,
       },
       recentOrders: orders.slice(0, 10),
+      recentCustomers: customers.slice(0, 10),
       recentLogs: db.getAuditLogs().slice(0, 15),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- CUSTOMERS DIRECTORY ---
+adminRouter.get('/customers', requireAdmin, async (req, res) => {
+  try {
+    await Promise.all([
+      db.syncWithFirebaseOrders().catch(() => {}),
+      db.syncWithFirebaseStudents().catch(() => {}),
+    ]);
+    const customers = db.getCustomersSummary();
+    res.json({ success: true, customers });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.delete('/customers/:customerId', requireAdmin, async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const { email, mobile, orderIds } = req.body || {};
+    const result = await db.deleteCustomer(
+      customerId,
+      { email, mobile, orderIds },
+      'admin'
+    );
+    if (!result.success) {
+      return res.status(404).json({ success: false, error: result.error });
+    }
+    res.json({
+      success: true,
+      message: `Customer "${result.deletedName || customerId}" permanently removed along with ${result.deletedOrderIds.length} order(s) and all PDF access.`,
+      deletedOrderIds: result.deletedOrderIds,
+      deletedUserIds: result.deletedUserIds,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- REAL REPORTS ---
+adminRouter.get('/reports', requireAdmin, async (req, res) => {
+  try {
+    await db.syncWithFirebaseOrders().catch(() => {});
+    const range = (req.query.range as string) || 'all';
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+    const { matches } = getDateRangeBounds(range, startDate, endDate);
+
+    const allOrders = db.getOrders().filter((o) => matches(o.createdAt));
+    const verifiedOrders = allOrders.filter((o) => o.paymentStatus === 'verified');
+
+    const subjectCountMap = new Map<
+      string,
+      { productId: string; subjectCode: string; subjectName: string; count: number }
+    >();
+    const packageCountMap = new Map<string, { packageName: string; count: number; revenue: number }>();
+
+    for (const ord of verifiedOrders) {
+      const pkg = ord.packageName || 'BCA Question Bank Bundle';
+      const pkgEntry = packageCountMap.get(pkg) || { packageName: pkg, count: 0, revenue: 0 };
+      pkgEntry.count += 1;
+      pkgEntry.revenue += Number(ord.totalAmount) || 0;
+      packageCountMap.set(pkg, pkgEntry);
+
+      for (const item of ord.items || []) {
+        const prev = subjectCountMap.get(item.productId) || {
+          productId: item.productId,
+          subjectCode: item.subjectCode,
+          subjectName: item.subjectName,
+          count: 0,
+        };
+        prev.count += 1;
+        subjectCountMap.set(item.productId, prev);
+      }
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        totalOrders: allOrders.length,
+        verifiedOrders: verifiedOrders.length,
+        pendingOrders: allOrders.filter((o) => o.paymentStatus === 'pending').length,
+        rejectedOrders: allOrders.filter(
+          (o) => o.paymentStatus === 'rejected' || o.paymentStatus === 'failed'
+        ).length,
+        totalRevenue: verifiedOrders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0),
+        averageOrderValue:
+          verifiedOrders.length > 0
+            ? Math.round(
+                verifiedOrders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0) /
+                  verifiedOrders.length
+              )
+            : 0,
+      },
+      topSubjects: Array.from(subjectCountMap.values()).sort((a, b) => b.count - a.count),
+      packageBreakdown: Array.from(packageCountMap.values()).sort((a, b) => b.revenue - a.revenue),
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -159,9 +421,12 @@ adminRouter.post('/products', requireAdmin, upload.single('pdfFile'), async (req
       originalPrice,
       examYear,
       published,
+      paperType,
+      specialization,
+      coverImageUrl,
     } = req.body;
 
-    if (!semesterId || !subjectCode || !subjectName || !price) {
+    if (!semesterId || !subjectCode || !subjectName || price === undefined || price === '') {
       return res.status(400).json({
         success: false,
         error: 'Semester ID, Subject Code, Subject Name, and Price are required.',
@@ -189,6 +454,8 @@ adminRouter.post('/products', requireAdmin, upload.single('pdfFile'), async (req
       parsedHighlights = syllabusHighlights;
     }
 
+    const coverUrl = coverImageUrl?.trim() || '';
+
     const newProduct = db.createProduct({
       semesterId,
       subjectCode: subjectCode.trim().toUpperCase(),
@@ -196,12 +463,16 @@ adminRouter.post('/products', requireAdmin, upload.single('pdfFile'), async (req
       description: description?.trim() || '',
       syllabusHighlights: parsedHighlights,
       price: Number(price),
-      originalPrice: originalPrice ? Number(originalPrice) : Number(price) * 2,
+      originalPrice: originalPrice ? Number(originalPrice) : Math.round(Number(price) * 2),
       pageCount: pageCount || 30,
       privateStoragePath: storagePath,
       fileSizeKb,
       published: published === true || published === 'true',
       examYear: examYear?.trim() || '2024-2025 Edition',
+      paperType: paperType === 'specialization' ? 'specialization' : 'core',
+      specialization: specialization?.trim() || undefined,
+      coverImageUrl: coverUrl,
+      imageUrl: coverUrl,
     });
 
     db.logAdminAction({
@@ -225,10 +496,17 @@ adminRouter.put('/products/:id', requireAdmin, upload.single('pdfFile'), async (
 
     const updates: any = { ...req.body };
 
-    if (updates.price) updates.price = Number(updates.price);
-    if (updates.originalPrice) updates.originalPrice = Number(updates.originalPrice);
+    if (updates.price !== undefined && updates.price !== '') updates.price = Number(updates.price);
+    if (updates.originalPrice !== undefined && updates.originalPrice !== '') {
+      updates.originalPrice = Number(updates.originalPrice);
+    }
     if (updates.published !== undefined) {
       updates.published = updates.published === true || updates.published === 'true';
+    }
+    if (updates.coverImageUrl !== undefined) {
+      updates.imageUrl = updates.coverImageUrl;
+    } else if (updates.imageUrl !== undefined) {
+      updates.coverImageUrl = updates.imageUrl;
     }
 
     if (req.file) {
@@ -252,7 +530,7 @@ adminRouter.put('/products/:id', requireAdmin, upload.single('pdfFile'), async (
       action: 'UPDATE_SUBJECT',
       targetId: req.params.id,
       targetType: 'PRODUCT',
-      details: `Updated subject ${updated?.subjectCode} (Price: ₹${updated?.price}, Published: ${updated?.published})`,
+      details: `Updated subject ${updated?.subjectCode} (Price: ₹${updated?.price}, Regular: ₹${updated?.originalPrice}, Published: ${updated?.published}${req.file ? ', PDF replaced' : ''})`,
     });
 
     res.json({ success: true, product: updated });
@@ -276,6 +554,245 @@ adminRouter.delete('/products/:id', requireAdmin, (req, res) => {
     });
 
     res.json({ success: true, message: 'Subject deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- BANNERS / SLIDER MANAGEMENT ---
+
+adminRouter.get('/banners', requireAdmin, (req, res) => {
+  try {
+    res.json({ success: true, banners: db.getBanners() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.post('/banners', requireAdmin, (req, res) => {
+  try {
+    const banner = db.saveBanner(req.body);
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'CREATE_BANNER',
+      targetId: banner.id,
+      targetType: 'BANNER',
+      details: `Created sliding banner "${banner.title}" (Order: ${banner.order}, Active: ${banner.active})`,
+    });
+    res.json({ success: true, banner, banners: db.getBanners() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.put('/banners/:id', requireAdmin, (req, res) => {
+  try {
+    const banner = db.saveBanner({ ...req.body, id: req.params.id });
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'UPDATE_BANNER',
+      targetId: banner.id,
+      targetType: 'BANNER',
+      details: `Updated sliding banner "${banner.title}" (Order: ${banner.order}, Active: ${banner.active})`,
+    });
+    res.json({ success: true, banner, banners: db.getBanners() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.post('/banners/reorder', requireAdmin, (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ success: false, error: 'orderedIds array required.' });
+    }
+    const banners = db.reorderBanners(orderedIds);
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'REORDER_BANNERS',
+      details: `Reordered ${banners.length} homepage sliding banners.`,
+    });
+    res.json({ success: true, banners });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.delete('/banners/:id', requireAdmin, (req, res) => {
+  try {
+    const deleted = db.deleteBanner(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Banner not found' });
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'DELETE_BANNER',
+      targetId: req.params.id,
+      targetType: 'BANNER',
+      details: `Deleted banner ${req.params.id}`,
+    });
+    res.json({ success: true, banners: db.getBanners() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- PACKAGES MANAGEMENT ---
+
+adminRouter.get('/packages', requireAdmin, (req, res) => {
+  try {
+    res.json({
+      success: true,
+      packages: db.getPackages(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.post('/packages', requireAdmin, (req, res) => {
+  try {
+    const pkg = db.savePackage(req.body);
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'CREATE_PACKAGE',
+      targetId: pkg.id,
+      targetType: 'PACKAGE',
+      details: `Saved package "${pkg.name}" (Full Offer ₹${pkg.fullPackageOfferPrice}, Regular ₹${pkg.fullPackageRegularPrice})`,
+    });
+    res.json({
+      success: true,
+      package: pkg,
+      packages: db.getPackages(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.put('/packages/:id', requireAdmin, (req, res) => {
+  try {
+    const pkg = db.savePackage({ ...req.body, id: req.params.id });
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'UPDATE_PACKAGE',
+      targetId: pkg.id,
+      targetType: 'PACKAGE',
+      details: `Updated package "${pkg.name}" (Core ₹${pkg.coreOfferPrice}/₹${pkg.coreRegularPrice}, Full ₹${pkg.fullPackageOfferPrice}/₹${pkg.fullPackageRegularPrice}, Active: ${pkg.active})`,
+    });
+    res.json({
+      success: true,
+      package: pkg,
+      packages: db.getPackages(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.delete('/packages/:id', requireAdmin, (req, res) => {
+  try {
+    const deleted = db.deletePackage(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Package not found' });
+    res.json({ success: true, packages: db.getPackages() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- OFFERS & PRICING MANAGEMENT ---
+
+adminRouter.get('/offers', requireAdmin, (req, res) => {
+  try {
+    res.json({
+      success: true,
+      offers: db.getOffers(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.post('/offers', requireAdmin, (req, res) => {
+  try {
+    const offer = db.saveOffer(req.body);
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'CREATE_OFFER',
+      targetId: offer.id,
+      targetType: 'OFFER',
+      details: `Created offer "${offer.title}" (₹${offer.offerPrice} vs Regular ₹${offer.regularPrice}, Expiry: ${offer.expiryDate})`,
+    });
+    res.json({
+      success: true,
+      offer,
+      offers: db.getOffers(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.put('/offers/:id', requireAdmin, (req, res) => {
+  try {
+    const offer = db.saveOffer({ ...req.body, id: req.params.id });
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'UPDATE_OFFER',
+      targetId: offer.id,
+      targetType: 'OFFER',
+      details: `Updated offer "${offer.title}" (₹${offer.offerPrice} / Regular ₹${offer.regularPrice}, Active: ${offer.active}, Expiry: ${offer.expiryDate})`,
+    });
+    res.json({
+      success: true,
+      offer,
+      offers: db.getOffers(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.delete('/offers/:id', requireAdmin, (req, res) => {
+  try {
+    const deleted = db.deleteOffer(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, error: 'Offer not found' });
+    res.json({
+      success: true,
+      offers: db.getOffers(),
+      effectivePricing: db.getEffectivePackagePricing(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- WEBSITE SETTINGS MANAGEMENT ---
+
+adminRouter.get('/site-settings', requireAdmin, (req, res) => {
+  try {
+    res.json({ success: true, siteSettings: db.getSiteSettings() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+adminRouter.put('/site-settings', requireAdmin, (req, res) => {
+  try {
+    const siteSettings = db.updateSiteSettings(req.body);
+    db.logAdminAction({
+      adminId: 'admin',
+      action: 'UPDATE_SITE_SETTINGS',
+      targetId: 'siteSettings',
+      targetType: 'SETTINGS',
+      details: `Updated website settings (Announcement: ${siteSettings.announcement.enabled ? 'ON' : 'OFF'}, UPI: ${siteSettings.payment.upiId})`,
+    });
+    res.json({ success: true, siteSettings });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -425,4 +942,3 @@ adminRouter.post('/clear-test-data', requireAdmin, (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-

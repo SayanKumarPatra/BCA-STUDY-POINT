@@ -48,7 +48,9 @@ productsRouter.get('/products', (req, res) => {
       fileSizeKb: p.fileSizeKb,
       examYear: p.examYear,
       coverImageUrl: p.coverImageUrl,
+      imageUrl: p.imageUrl || p.coverImageUrl,
       paperType: p.paperType,
+      specialization: p.specialization,
       published: p.published,
       updatedAt: p.updatedAt,
     }));
@@ -56,6 +58,32 @@ productsRouter.get('/products', (req, res) => {
     res.json({
       success: true,
       products: safeProducts,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/storefront-config
+ * Public endpoint returning active banners, live package pricing (with server-side expiry check),
+ * active offers, and website content/payment settings.
+ */
+productsRouter.get('/storefront-config', (req, res) => {
+  try {
+    const banners = db.getActiveBanners();
+    const effectivePricing = db.getEffectivePackagePricing();
+    const siteSettings = db.getSiteSettings();
+    const activeOffers = db
+      .getOffers()
+      .filter((o) => db.isOfferCurrentlyValid(o).isValid);
+
+    res.json({
+      success: true,
+      banners,
+      packagePricing: effectivePricing,
+      offers: activeOffers,
+      siteSettings,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -86,6 +114,10 @@ productsRouter.get('/products/:id', (req, res) => {
         pageCount: product.pageCount,
         fileSizeKb: product.fileSizeKb,
         examYear: product.examYear,
+        coverImageUrl: product.coverImageUrl,
+        imageUrl: product.imageUrl || product.coverImageUrl,
+        paperType: product.paperType,
+        specialization: product.specialization,
       },
     });
   } catch (error: any) {

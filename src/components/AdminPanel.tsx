@@ -1,2163 +1,797 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Lock,
-  LayoutDashboard,
-  Layers,
-  BookOpen,
-  ShoppingBag,
-  Laptop,
-  History,
-  Code2,
-  Plus,
-  Trash2,
+  Menu,
   RefreshCw,
-  Search,
-  AlertCircle,
-  CheckCircle2,
   ArrowLeft,
-  Edit3,
-  Image,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  Bell,
+  ShieldCheck,
 } from 'lucide-react';
 import { api, getStoredAdminKey, setStoredAdminKey } from '../services/api';
 import { BRAND } from '../constants/brand';
-import { FALLBACK_PRODUCTS } from '../constants/fallbackProducts';
 import {
-  updateProductRealtime,
-  syncAllOfficialProductsToFirestore,
   subscribeToOrdersRealtime,
+  syncAllOfficialProductsToFirestore,
   updateOrderStatusRealtime,
+  deleteOrderRealtime,
+  deleteCustomerRealtime,
 } from '../firebase/firebase';
-import type { Semester, Product, Order, DeviceBinding, AdminAuditLog } from '../types';
+import type {
+  AdminDashboardStats,
+  AdminAuditLog,
+  BannerSlide,
+  CustomerSummary,
+  DeviceBinding,
+  EffectivePackagePricing,
+  OfferConfig,
+  Order,
+  PackageDefinition,
+  Product,
+  Semester,
+  SiteSettings,
+} from '../types';
+import type { AdminNavTab, DateRangePreset } from './admin/adminTypes';
+import { AdminSidebar } from './admin/AdminSidebar';
+import { AdminDashboardView } from './admin/AdminDashboardView';
+import { AdminOrdersView, AdminCustomersView } from './admin/AdminCustomersOrdersViews';
+import {
+  AdminProductsView,
+  AdminPackagesView,
+  AdminOffersView,
+} from './admin/AdminProductsPackagesOffersViews';
+import { AdminBannersView, AdminWebsiteView } from './admin/AdminWebsiteViews';
+import { AdminReportsView, AdminSettingsView } from './admin/AdminSystemViews';
+import {
+  ConfirmModal,
+  CustomerProfileModal,
+  OrderDetailsModal,
+  RejectOrderModal,
+} from './admin/AdminModals';
+
+const TAB_TITLES: Record<AdminNavTab, { title: string; subtitle: string }> = {
+  dashboard: {
+    title: 'Dashboard Overview',
+    subtitle: 'Real-time sales, revenue, pending approvals, and quick shortcuts',
+  },
+  orders: {
+    title: 'Orders & Sales',
+    subtitle: 'Manage customer orders, verify payment screenshots, approve or reject transactions',
+  },
+  customers: {
+    title: 'Customers',
+    subtitle: 'View customer profiles, purchased subjects, packages & spend history',
+  },
+  products: {
+    title: 'Products (PDF)',
+    subtitle: 'Manage BCA question bank PDFs, prices, regular MRP, covers & availability',
+  },
+  packages: {
+    title: 'Package Management',
+    subtitle: 'Configure compulsory & optional study bundles and package tier pricing',
+  },
+  offers: {
+    title: 'Pricing & Offers',
+    subtitle: 'Control ₹99 Full Package Offer & promotional offers with auto-expiry',
+  },
+  banners: {
+    title: 'Banner / Slider Management',
+    subtitle: 'Upload, edit, reorder, and publish homepage sliding hero banners',
+  },
+  website: {
+    title: 'Website Management',
+    subtitle: 'Manage top announcement bar, promotional labels & UPI payment settings',
+  },
+  reports: {
+    title: 'Sales & Subject Reports',
+    subtitle: 'Track real performance across dates, top-selling subjects & packages',
+  },
+  settings: {
+    title: 'System Settings & Security',
+    subtitle: 'Semesters, 1:1 device bindings, security audit logs & Firebase sync',
+  },
+};
 
 export const AdminPanel: React.FC<{ onExit: () => void }> = ({ onExit }) => {
-  const [adminKey, setAdminKey] = useState<string>(getStoredAdminKey() || '');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(Boolean(getStoredAdminKey()));
   const [loginInput, setLoginInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'semesters' | 'subjects' | 'orders' | 'devices' | 'audit' | 'config'
-  >('dashboard');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Admin Data State
-  const [stats, setStats] = useState<any>(null);
+  // Navigation & Responsive Drawer
+  const [activeTab, setActiveTab] = useState<AdminNavTab>('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Global Date Filter
+  const [dateRange, setDateRange] = useState<DateRangePreset>('today');
+  const [customStartDate, setCustomStartDate] = useState<string>(() =>
+    new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+  );
+  const [customEndDate, setCustomEndDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+
+  // Real Backend + RTDB Data State
+  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [banners, setBanners] = useState<BannerSlide[]>([]);
+  const [packages, setPackages] = useState<PackageDefinition[]>([]);
+  const [offers, setOffers] = useState<OfferConfig[]>([]);
+  const [effectivePricing, setEffectivePricing] = useState<EffectivePackagePricing | null>(null);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
   const [devices, setDevices] = useState<DeviceBinding[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
+
   const [isLoading, setIsLoading] = useState(false);
-  const [actionSuccess, setActionSuccess] = useState('');
+  const [toast, setToast] = useState<{ message: string; isError: boolean } | null>(null);
 
-  // Modals & Form States
-  const [isAddingSemester, setIsAddingSemester] = useState(false);
-  const [semNumber, setSemNumber] = useState(7);
-  const [semTitle, setSemTitle] = useState('');
-  const [semDesc, setSemDesc] = useState('');
-
-  const [isAddingProduct, setIsAddingProduct] = useState(false);
-  const [prodSemesterId, setProdSemesterId] = useState('');
-  const [prodCode, setProdCode] = useState('');
-  const [prodName, setProdName] = useState('');
-  const [prodPrice, setProdPrice] = useState(149);
-  const [prodDesc, setProdDesc] = useState('');
-  const [prodHighlights, setProdHighlights] = useState('');
-  const [prodCoverUrl, setProdCoverUrl] = useState('');
-  const [prodFile, setProdFile] = useState<File | null>(null);
-
-  // Device reset modal state
-  const [selectedDeviceUser, setSelectedDeviceUser] = useState<DeviceBinding | null>(null);
-  const [resetReason, setResetReason] = useState('Student verified device replacement request');
-
-  // Search and order filter
-  const [searchFilter, setSearchFilter] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+  // Inspection / Action Modals
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSummary | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
-  const [rejectReasonText, setRejectReasonText] = useState('ফেক পেমেন্ট রসিদ / ভুল UTR');
   const [isSubmittingReject, setIsSubmittingReject] = useState(false);
+  const [deleteOrderTarget, setDeleteOrderTarget] = useState<Order | null>(null);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<CustomerSummary | null>(null);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
 
-  // Real-time Product Edit Modal State
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editPrice, setEditPrice] = useState<number>(99);
-  const [editOriginalPrice, setEditOriginalPrice] = useState<number>(199);
-  const [editImageUrl, setEditImageUrl] = useState<string>('');
-  const [editSubjectName, setEditSubjectName] = useState<string>('');
-  const [editSubjectCode, setEditSubjectCode] = useState<string>('');
-  const [editDescription, setEditDescription] = useState<string>('');
-  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
-  const [editError, setEditError] = useState<string>('');
+  // Header Quick Jump Search
+  const [quickJump, setQuickJump] = useState('');
 
-  const handleOpenEditProduct = (prod: Product) => {
-    setEditingProduct(prod);
-    setEditPrice(prod.price);
-    setEditOriginalPrice(prod.originalPrice || Math.round(prod.price * 2));
-    setEditImageUrl(prod.coverImageUrl || prod.imageUrl || '');
-    setEditSubjectName(prod.subjectName);
-    setEditSubjectCode(prod.subjectCode);
-    setEditDescription(prod.description || '');
-    setEditError('');
-  };
+  const notify = useCallback((message: string, isError = false) => {
+    setToast({ message, isError });
+  }, []);
 
-  const handleSaveProductEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProduct) return;
-    setIsSavingEdit(true);
-    setEditError('');
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
+  const loadAllData = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setIsLoading(true);
     try {
-      const updates: Partial<Product> = {
-        price: Number(editPrice),
-        originalPrice: Number(editOriginalPrice),
-        coverImageUrl: editImageUrl.trim(),
-        imageUrl: editImageUrl.trim(),
-        subjectName: editSubjectName.trim(),
-        subjectCode: editSubjectCode.trim(),
-        description: editDescription.trim(),
-        updatedAt: new Date().toISOString(),
-      };
+      const [
+        statsRes,
+        ordersRes,
+        customersRes,
+        semsRes,
+        prodsRes,
+        bannersRes,
+        pkgsRes,
+        offersRes,
+        settingsRes,
+        devicesRes,
+        logsRes,
+      ] = await Promise.all([
+        api.getAdminStats({
+          range: dateRange,
+          startDate: customStartDate,
+          endDate: customEndDate,
+        }),
+        api.getAdminOrders(),
+        api.getAdminCustomers(),
+        api.getSemesters(),
+        api.getProducts(),
+        api.getAdminBanners().catch(() => ({ banners: [] })),
+        api.getAdminPackages().catch(() => ({ packages: [], effectivePricing: null })),
+        api.getAdminOffers().catch(() => ({ offers: [], effectivePricing: null })),
+        api.getSiteSettings().catch(() => ({ siteSettings: null })),
+        api.getAdminDevices(),
+        api.getAdminAuditLogs(),
+      ]);
 
-      // 1. Real-time Firestore sync directly
-      await updateProductRealtime(editingProduct.id, updates);
-
-      // 2. Local backend API sync
-      try {
-        await api.updateProduct(editingProduct.id, updates);
-      } catch (apiErr) {
-        console.warn('Backend API update warning (Firebase already updated):', apiErr);
-      }
-
-      // 3. Update local state
-      setProducts((prev) =>
-        prev.map((p) => (p.id === editingProduct.id ? { ...p, ...updates } : p))
-      );
-
-      setActionSuccess(`✓ ${editingProduct.subjectCode} দাম ও ইমেজ সফলভাবে রিয়েল-টাইমে আপডেট হয়েছে!`);
-      setTimeout(() => setActionSuccess(''), 4000);
-      setEditingProduct(null);
+      setStats(statsRes.stats || null);
+      setOrders(ordersRes.orders || statsRes.recentOrders || []);
+      setCustomers(customersRes.customers || statsRes.recentCustomers || []);
+      setSemesters(semsRes.semesters || []);
+      setProducts(prodsRes.products || []);
+      setBanners(bannersRes.banners || []);
+      setPackages(pkgsRes.packages || []);
+      setOffers(offersRes.offers || []);
+      setEffectivePricing(offersRes.effectivePricing || pkgsRes.effectivePricing || null);
+      setSiteSettings(settingsRes.siteSettings || null);
+      setDevices(devicesRes.devices || []);
+      setAuditLogs(logsRes.logs || statsRes.recentLogs || []);
     } catch (err: any) {
-      setEditError(err.message || 'Failed to update subject');
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
-
-  const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
-  const [isClearingData, setIsClearingData] = useState(false);
-
-  const handleSyncOfficialSubjects = async () => {
-    setIsSyncingFirebase(true);
-    setActionSuccess('');
-    try {
-      const res = await syncAllOfficialProductsToFirestore();
-      if (res.success) {
-        setActionSuccess(`✓ ${res.count}টি অফিসিয়াল BCA বিষয় ও 3D কভার সফলভাবে ফায়ারবেস ফায়ারস্টোরে সিঙ্ক হয়েছে!`);
-        setTimeout(() => setActionSuccess(''), 5000);
-        await loadAllAdminData();
+      if (err.status === 401 || err.status === 403) {
+        setStoredAdminKey(null);
+        setIsAuthenticated(false);
+        setLoginError('Admin session expired. Please sign in again.');
       } else {
-        setLoginError(res.error || 'Failed to sync to Firestore');
+        notify(err.message || 'Failed to sync dashboard data.', true);
       }
-    } catch (err: any) {
-      setLoginError(err.message || 'Sync error');
     } finally {
-      setIsSyncingFirebase(false);
+      setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, dateRange, customStartDate, customEndDate, notify]);
 
-  const handleClearTestData = async () => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে সমস্ত পুরাতন টেস্ট অর্ডার, স্টুডেন্ট এবং ডিভাইস ডেটা মুছে ফেলতে চান?')) {
-      return;
-    }
-    setIsClearingData(true);
-    try {
-      const res = await api.clearTestData();
-      if (res.success) {
-        setActionSuccess(`✓ ${res.message}`);
-        setTimeout(() => setActionSuccess(''), 5000);
-        await loadAllAdminData();
-      }
-    } catch (err: any) {
-      setLoginError(err.message || 'Failed to clear data');
-    } finally {
-      setIsClearingData(false);
-    }
-  };
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadAllData();
+
+    // Real-time Firebase RTDB Order subscription so newly submitted orders show up immediately
+    const unsubscribeOrders = subscribeToOrdersRealtime((rtdbOrders) => {
+      if (!rtdbOrders || rtdbOrders.length === 0) return;
+      setOrders((prev) => {
+        const mergedMap = new Map<string, Order>();
+        rtdbOrders.forEach((o: Order) => mergedMap.set(o.orderId, o));
+        prev.forEach((o: Order) => {
+          if (!mergedMap.has(o.orderId)) mergedMap.set(o.orderId, o);
+        });
+        return Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
+    });
+
+    return () => {
+      unsubscribeOrders();
+    };
+  }, [isAuthenticated, loadAllData]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    const trimmed = loginInput.trim();
-    if (!trimmed) {
-      setLoginError('দয়া করে Admin Secret Key লিখুন।');
-      return;
-    }
-
+    setIsLoggingIn(true);
     try {
-      const res = await api.adminLogin(trimmed);
-      setAdminKey(res.adminKey);
+      const res = await api.adminLogin(loginInput);
       setStoredAdminKey(res.adminKey);
       setIsAuthenticated(true);
+      setLoginInput('');
     } catch (err: any) {
-      if (trimmed === '152006' || trimmed === 'bca_admin_secure_2026') {
-        // Fallback for immediate authentication
-        setAdminKey(trimmed);
-        setStoredAdminKey(trimmed);
-        setIsAuthenticated(true);
-        return;
-      }
-      setLoginError(err.message || 'ভুল অ্যাডমিন পাসওয়ার্ড। অনুগ্রহ করে সঠিক পাসওয়ার্ড দিন।');
+      setLoginError(err.message || 'Invalid Administrator Password / Key.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const handleLogout = () => {
     setStoredAdminKey(null);
-    setAdminKey('');
     setIsAuthenticated(false);
+    setStats(null);
   };
 
-  const loadAllAdminData = async () => {
-    if (!isAuthenticated) return;
-    setIsLoading(true);
-    try {
-      const [statsData, semData, prodData, ordData, devData, logData] = await Promise.all([
-        api.getAdminStats(),
-        api.getSemesters(),
-        api.getProducts(),
-        api.getAdminOrders(),
-        api.getAdminDevices(),
-        api.getAdminAuditLogs(),
-      ]);
-
-      setStats(statsData.stats);
-      setSemesters(semData.semesters);
-      setProducts(prodData.products);
-      setOrders(ordData.orders);
-      setDevices(devData.devices);
-      setAuditLogs(logData.logs);
-      if (semData.semesters.length > 0 && !prodSemesterId) {
-        setProdSemesterId(semData.semesters[0].id);
-      }
-    } catch (err: any) {
-      console.error('Error loading admin data:', err);
-      if (err.message?.includes('Unauthorized')) {
-        handleLogout();
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadAllAdminData();
-
-      // Listen directly to Firebase Realtime Database for all live orders
-      const unsubscribeOrders = subscribeToOrdersRealtime((rtdbOrders) => {
-        if (rtdbOrders) {
-          setOrders((currentOrders) => {
-            const map = new Map<string, Order>();
-            // Add RTDB orders first
-            for (const o of rtdbOrders) {
-              if (o.orderId) map.set(o.orderId, o);
-            }
-            // Merge with any current orders
-            for (const o of currentOrders) {
-              if (o.orderId && !map.has(o.orderId)) {
-                map.set(o.orderId, o);
-              }
-            }
-            return Array.from(map.values()).sort(
-              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
-          });
-        }
-      });
-
-      // Auto-poll orders and stats every 5 seconds as a secondary safety net
-      const autoRefreshTimer = setInterval(() => {
-        Promise.all([
-          api.getAdminStats(),
-          api.getAdminOrders(),
-        ])
-          .then(([statsData, ordData]) => {
-            if (statsData?.stats) setStats(statsData.stats);
-            if (ordData?.orders && ordData.orders.length > 0) {
-              setOrders((currentOrders) => {
-                const map = new Map<string, Order>();
-                for (const o of currentOrders) {
-                  if (o.orderId) map.set(o.orderId, o);
-                }
-                for (const o of ordData.orders) {
-                  if (o.orderId) {
-                    const existing = map.get(o.orderId);
-                    map.set(o.orderId, { ...existing, ...o });
-                  }
-                }
-                return Array.from(map.values()).sort(
-                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
-              });
-            }
-          })
-          .catch(() => {});
-      }, 5000);
-
-      return () => {
-        unsubscribeOrders();
-        clearInterval(autoRefreshTimer);
-      };
-    }
-  }, [isAuthenticated]);
-
-  const showSuccessBanner = (msg: string) => {
-    setActionSuccess(msg);
-    setTimeout(() => setActionSuccess(''), 4000);
-  };
-
-  // Semester Actions
-  const handleCreateSemester = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.createSemester({
-        semesterNumber: semNumber,
-        title: semTitle,
-        description: semDesc,
-        published: true,
-      });
-      setIsAddingSemester(false);
-      setSemTitle('');
-      setSemDesc('');
-      showSuccessBanner('New semester added successfully.');
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const toggleSemesterPublished = async (sem: Semester) => {
-    try {
-      await api.updateSemester(sem.id, { published: !sem.published });
-      showSuccessBanner(`Semester publication updated.`);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  // Product & PDF Actions
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prodSemesterId || !prodCode || !prodName || !prodPrice) {
-      alert('Please fill all required fields');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('semesterId', prodSemesterId);
-    formData.append('subjectCode', prodCode);
-    formData.append('subjectName', prodName);
-    formData.append('price', String(prodPrice));
-    formData.append('description', prodDesc);
-    formData.append('coverImageUrl', prodCoverUrl);
-    formData.append('published', 'true');
-    formData.append('syllabusHighlights', JSON.stringify(prodHighlights.split('\n').filter(Boolean)));
-    if (prodFile) {
-      formData.append('pdfFile', prodFile);
-    }
-
-    try {
-      await api.createProductWithPdf(formData);
-      setIsAddingProduct(false);
-      setProdCode('');
-      setProdName('');
-      setProdDesc('');
-      setProdHighlights('');
-      setProdCoverUrl('');
-      setProdFile(null);
-      showSuccessBanner('Subject and question bank created successfully!');
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const toggleProductPublished = async (prod: Product) => {
-    const formData = new FormData();
-    formData.append('published', String(!prod.published));
-    try {
-      await api.updateProductWithPdf(prod.id, formData);
-      showSuccessBanner(`Subject ${prod.subjectCode} updated.`);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const handleDeleteProduct = async (id: string, code: string) => {
-    if (!confirm(`Are you sure you want to delete subject ${code}? This cannot be undone.`)) return;
-    try {
-      await api.deleteProduct(id);
-      showSuccessBanner(`Subject ${code} deleted.`);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  // Device Reset Action
-  const handleExecuteDeviceReset = async () => {
-    if (!selectedDeviceUser) return;
-    try {
-      await api.resetDevice(selectedDeviceUser.userId, resetReason);
-      showSuccessBanner(`Device binding reset for ${selectedDeviceUser.studentName}.`);
-      setSelectedDeviceUser(null);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  // Order Approval Actions
   const handleApproveOrder = async (orderId: string) => {
     try {
-      // 1. Direct Firebase Realtime Database update
       await updateOrderStatusRealtime(orderId, 'verified');
-
-      // 2. Direct backend database approval
-      try {
-        await api.approveOrder(orderId);
-      } catch (backendErr) {
-        console.warn('Backend API order approve notice:', backendErr);
-      }
-
-      // 3. Immediately update UI state
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.orderId === orderId
-            ? { ...o, paymentStatus: 'verified', verifiedAt: new Date().toISOString() }
-            : o
-        )
-      );
-
-      showSuccessBanner(`✓ অর্ডার ${orderId} সফলভাবে অনুমোদিত হয়েছে এবং ছাত্রছাত্রীর পিডিএফ অ্যাক্সেস খুলে দেওয়া হয়েছে!`);
-      loadAllAdminData();
+      await api.approveOrder(orderId);
+      notify(`Order ${orderId} verified and student PDF access activated.`);
+      loadAllData();
     } catch (err: any) {
-      alert(err.message || 'অর্ডার অনুমোদন করতে সমস্যা হয়েছে');
+      notify(err.message || 'Failed to approve order', true);
     }
   };
 
-  const handleRejectOrder = (orderId: string) => {
-    const ord = orders.find((o) => o.orderId === orderId);
-    if (ord) {
-      setRejectingOrder(ord);
-      setRejectReasonText('ভুল বা ফেক পেমেন্ট রসিদ / Fake UTR');
-    }
-  };
-
-  const handleConfirmRejectOrder = async () => {
+  const handleRejectOrderSubmit = async (reason: string) => {
     if (!rejectingOrder) return;
-    const orderId = rejectingOrder.orderId;
-    const reason = rejectReasonText.trim() || 'Payment verification failed / Fake receipt';
     setIsSubmittingReject(true);
     try {
-      await updateOrderStatusRealtime(orderId, 'failed', { rejectionReason: reason });
-      try {
-        await api.rejectOrder(orderId, reason);
-      } catch (backendErr) {
-        console.warn('Backend API order reject notice:', backendErr);
-      }
-
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.orderId === orderId ? { ...o, paymentStatus: 'failed', rejectionReason: reason } : o
-        )
-      );
-
-      showSuccessBanner(`✓ অর্ডার ${orderId} (${rejectingOrder.studentName}) সফলভাবে বাতিল করা হয়েছে।`);
+      await updateOrderStatusRealtime(rejectingOrder.orderId, 'rejected', {
+        rejectionReason: reason,
+      });
+      await api.rejectOrder(rejectingOrder.orderId, reason);
+      notify(`Order ${rejectingOrder.orderId} rejected.`);
       setRejectingOrder(null);
-      loadAllAdminData();
+      loadAllData();
     } catch (err: any) {
-      alert(err.message || 'অর্ডার বাতিল করতে সমস্যা হয়েছে');
+      notify(err.message || 'Failed to reject order', true);
     } finally {
       setIsSubmittingReject(false);
     }
   };
 
-  const handleDeleteDevice = async (userId: string, studentName: string) => {
-    if (
-      !window.confirm(
-        `আপনি কি নিশ্চিত যে "${studentName}" এর ডিভাইস স্থায়ীভাবে মুছে ফেলতে চান? সে আবার যেকোনো নতুন ডিভাইস থেকে লগইন করতে পারবে।`
+  const handleConfirmDeleteOrder = async () => {
+    if (!deleteOrderTarget) return;
+    const target = deleteOrderTarget;
+    setIsDeletingOrder(true);
+    try {
+      await api.deleteOrder(target.orderId);
+      setOrders((prev) => prev.filter((o) => o.orderId !== target.orderId));
+      setDeleteOrderTarget(null);
+      notify(`Deleted order ${target.orderId}.`);
+      deleteOrderRealtime(target.orderId).catch(() => {});
+      loadAllData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to delete order', true);
+    } finally {
+      setIsDeletingOrder(false);
+    }
+  };
+
+  const handleConfirmDeleteCustomer = async () => {
+    if (!deleteCustomerTarget) return;
+    const target = deleteCustomerTarget;
+    setIsDeletingCustomer(true);
+    try {
+      const orderIds = (target.orderHistory || []).map((o) => o.orderId);
+      const userIds = Array.from(
+        new Set([target.customerId, ...(target.orderHistory || []).map((o) => o.userId)])
+      ).filter(Boolean);
+
+      const res = await api.deleteCustomer({
+        customerId: target.customerId,
+        email: target.email,
+        mobile: target.mobile,
+        orderIds,
+      });
+
+      const removedOrderSet = new Set([...orderIds, ...(res.deletedOrderIds || [])]);
+      const removedEmail = (target.email || '').trim().toLowerCase();
+      const removedMobile = (target.mobile || '').replace(/\D/g, '');
+
+      // Instantly remove from UI state so there is zero perceived wait
+      setCustomers((prev) =>
+        prev.filter((c) => {
+          if (c.customerId === target.customerId) return false;
+          if (removedEmail && (c.email || '').trim().toLowerCase() === removedEmail) return false;
+          if (removedMobile.length >= 10 && (c.mobile || '').replace(/\D/g, '') === removedMobile) {
+            return false;
+          }
+          return true;
+        })
+      );
+      setOrders((prev) => prev.filter((o) => !removedOrderSet.has(o.orderId)));
+      setDeleteCustomerTarget(null);
+      if (selectedCustomer?.customerId === target.customerId) {
+        setSelectedCustomer(null);
+      }
+      notify(
+        res.message ||
+          `Permanently deleted customer "${target.fullName}" and revoked all PDF access.`
+      );
+
+      // Run client Firebase RTDB cleanup & stats refresh silently in background
+      deleteCustomerRealtime(
+        Array.from(new Set([...userIds, ...(res.deletedUserIds || [])])),
+        Array.from(removedOrderSet)
+      ).catch(() => {});
+      loadAllData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to delete customer', true);
+    } finally {
+      setIsDeletingCustomer(false);
+    }
+  };
+
+  const handleSyncAllToFirebase = async () => {
+    try {
+      const res = await syncAllOfficialProductsToFirestore();
+      if (res.success) {
+        notify(`Synchronized ${res.count} products to Firebase RTDB.`);
+        loadAllData();
+      } else {
+        notify(res.error || 'Firebase RTDB sync encountered an issue.', true);
+      }
+    } catch (err: any) {
+      notify(err.message || 'Firebase RTDB sync failed', true);
+    }
+  };
+
+  const pendingOrders = useMemo(
+    () => orders.filter((o) => o.paymentStatus === 'pending'),
+    [orders]
+  );
+
+  // Quick global search match
+  const quickMatchResults = useMemo(() => {
+    const q = quickJump.trim().toLowerCase();
+    if (q.length < 2) return null;
+    const matchedCustomers = customers
+      .filter(
+        (c) =>
+          (c.fullName || '').toLowerCase().includes(q) ||
+          (c.mobile || '').toLowerCase().includes(q) ||
+          (c.email || '').toLowerCase().includes(q)
       )
-    ) {
-      return;
-    }
-    try {
-      await api.deleteDevice(userId);
-      showSuccessBanner(`✓ ${studentName}-এর ডিভাইস সফলভাবে রিমুভ করা হয়েছে!`);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message || 'ডিভাইস মুছতে সমস্যা হয়েছে');
-    }
-  };
+      .slice(0, 4);
+    const matchedOrders = orders
+      .filter(
+        (o) =>
+          (o.orderId || '').toLowerCase().includes(q) ||
+          (o.paymentReference || '').toLowerCase().includes(q) ||
+          (o.studentName || '').toLowerCase().includes(q)
+      )
+      .slice(0, 4);
+    return { matchedCustomers, matchedOrders };
+  }, [quickJump, customers, orders]);
 
-  const handleDeleteOrder = async (orderId: string, studentName: string) => {
-    if (!window.confirm(`আপনি কি নিশ্চিত যে অর্ডার "${orderId}" (${studentName}) স্থায়ীভাবে মুছে ফেলতে চান? এটি Firebase ও সিস্টেম ডেটাবেস উভয় স্থান থেকেই মুছে ফেলা হবে।`)) {
-      return;
-    }
-    try {
-      await api.deleteOrder(orderId);
-      showSuccessBanner(`✓ অর্ডার ${orderId} সফলভাবে মুছে ফেলা হয়েছে!`);
-      loadAllAdminData();
-    } catch (err: any) {
-      alert(err.message || 'অর্ডার মুছতে সমস্যা হয়েছে');
-    }
-  };
-
-  const tabsContainerRef = useRef<HTMLDivElement>(null);
-
-  const scrollTabs = (direction: 'left' | 'right') => {
-    if (tabsContainerRef.current) {
-      const scrollAmount = direction === 'left' ? -220 : 220;
-      tabsContainerRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
-  };
-
+  // =========================================================================
+  // ADMIN LOGIN SCREEN (Website Crimson/Burgundy & Gold Liquid Glass Theme)
+  // =========================================================================
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-[#65000D] via-[#3D0009] to-[#240005]">
-        <div className="liquid-glass-master rounded-3xl max-w-sm w-full p-8 border border-[#FFE7A3]/30 shadow-[0_25px_60px_rgba(0,0,0,0.85)] text-center relative">
-          <img
-            src={BRAND.logoUrl}
-            alt="Logo"
-            className="w-16 h-16 rounded-full object-cover mx-auto ring-2 ring-[#FFD34E] shadow-[0_0_20px_rgba(255,211,78,0.4)] mb-3"
-          />
+      <div className="min-h-screen bg-radial-[at_50%_0%] from-[#970014] via-[#65000D] to-[#240005] text-white flex flex-col justify-center items-center p-4 selection:bg-[#FFD34E] selection:text-[#3D0009]">
+        <div className="w-full max-w-md liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 shadow-2xl overflow-hidden">
+          <div className="px-6 py-6 bg-gradient-to-b from-[#65000D]/90 to-[#3D0009]/95 border-b border-[#FFE7A3]/25 text-white text-center relative">
+            <img
+              src={BRAND.logoUrl}
+              alt="BCA STUDY POINT"
+              className="w-14 h-14 rounded-full object-cover mx-auto mb-3 ring-2 ring-[#FFD34E] shadow-lg"
+            />
+            <h1 className="text-xl font-extrabold tracking-tight text-white">BCA STUDY POINT</h1>
+            <p className="text-xs text-[#FFE7A3]/85 mt-0.5 font-medium">
+              Admin Management & Business Dashboard
+            </p>
+          </div>
 
-          <h2 className="text-xl font-black text-white">Admin Portal Access</h2>
-          <p className="text-xs text-[#FFE7A3] mt-1 font-medium">
-            Enter the authorized administrator secret key
-          </p>
+          <form onSubmit={handleLogin} className="p-6 sm:p-7 space-y-4">
+            <div className="flex items-center gap-2 text-xs text-[#FFE7A3]/90 bg-black/35 border border-[#FFE7A3]/20 rounded-xl px-3 py-2">
+              <ShieldCheck className="w-4 h-4 text-[#FFD34E] shrink-0" />
+              <span>Enter your existing Administrator Password / Secret Key to sign in.</span>
+            </div>
 
-          <form onSubmit={handleLogin} className="mt-6 space-y-4">
             {loginError && (
-              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-200 text-left">
-                {loginError}
+              <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{loginError}</span>
               </div>
             )}
+
             <div>
-              <input
-                type="password"
-                required
-                value={loginInput}
-                onChange={(e) => setLoginInput(e.target.value)}
-                placeholder="Enter Secret Key"
-                className="w-full px-4 py-2.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E] font-mono tracking-widest text-center"
-              />
+              <label className="block text-xs font-bold text-[#FFE7A3] mb-1.5">
+                Admin Password / Secret Key
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#FFD34E]/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  value={loginInput}
+                  onChange={(e) => setLoginInput(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-black/45 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#FFD34E]/30 focus:border-[#FFD34E]"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
-              className="btn-gold-primary w-full py-3 px-4 text-xs font-black rounded-full cursor-pointer shadow-md"
+              disabled={isLoggingIn}
+              className="btn-gold-primary w-full py-2.5 rounded-xl text-sm font-bold shadow-lg cursor-pointer disabled:opacity-60 transition-all"
             >
-              Authenticate Admin
+              {isLoggingIn ? 'Signing in...' : 'Sign In to Admin Panel'}
+            </button>
+
+            <button
+              type="button"
+              onClick={onExit}
+              className="w-full py-2 rounded-xl text-xs font-semibold text-[#FFE7A3]/85 hover:text-white hover:bg-white/10 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Public Storefront</span>
             </button>
           </form>
-
-          <button
-            onClick={onExit}
-            className="mt-5 text-xs text-white/70 hover:text-white flex items-center justify-center gap-1 mx-auto cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Public Website</span>
-          </button>
         </div>
       </div>
     );
   }
 
+  const currentMeta = TAB_TITLES[activeTab];
+
+  // =========================================================================
+  // AUTHENTICATED WEBSITE-THEMED DASHBOARD SHELL (Crimson/Burgundy & Gold)
+  // =========================================================================
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#65000D] via-[#3D0009] to-[#240005] flex flex-col text-white">
-      {/* Top Admin Header */}
-      <div className="bg-[#3D0009]/90 border-b border-[#FFE7A3]/25 px-4 sm:px-8 py-4 flex items-center justify-between shrink-0 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          <img
-            src={BRAND.logoUrl}
-            alt="Logo"
-            className="w-10 h-10 rounded-full object-cover ring-2 ring-[#FFD34E]/60 shadow-md"
-          />
-          <div>
-            <span className="text-sm sm:text-base font-black tracking-tight block text-white">
-              {BRAND.name} – Management Console
-            </span>
-            <span className="text-[10px] text-[#FFE7A3] font-mono">
-              Role: System Administrator (Authenticated)
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadAllAdminData}
-            className="p-2 text-white/70 hover:text-[#FFD34E] rounded-xl hover:bg-white/10 cursor-pointer"
-            title="Refresh All Data"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={onExit}
-            className="text-xs font-bold text-white bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-full border border-white/20 transition-colors"
-          >
-            Public Site
-          </button>
-          <button
-            onClick={handleLogout}
-            className="text-xs font-bold text-rose-300 hover:text-rose-200 px-3 py-1.5"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Success Notification Bar */}
-      {actionSuccess && (
-        <div className="bg-emerald-600/90 text-white text-xs py-2.5 px-4 text-center font-bold flex items-center justify-center gap-1.5 border-b border-emerald-400">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{actionSuccess}</span>
-        </div>
-      )}
-
-      {/* Main Admin Workspace */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Navigation Tabs with Horizontal Scroll Controls */}
-        <div className="relative flex items-center gap-1.5 pb-2 border-b border-white/15">
-          <button
-            type="button"
-            onClick={() => scrollTabs('left')}
-            className="p-2 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 text-[#FFE7A3] hover:text-white shrink-0 transition-colors shadow-sm cursor-pointer"
-            title="Scroll tabs left"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          <div
-            ref={tabsContainerRef}
-            className="flex-1 flex items-center gap-2 overflow-x-auto scroll-smooth py-1 px-1 scrollbar-thin"
-          >
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'semesters', label: 'Manage Semesters', icon: Layers },
-              { id: 'subjects', label: 'Subjects & PDFs', icon: BookOpen },
-              { id: 'orders', label: 'Orders & Sales', icon: ShoppingBag },
-              { id: 'devices', label: 'Device Binding & Resets', icon: Laptop },
-              { id: 'audit', label: 'Security Audit Logs', icon: History },
-              { id: 'config', label: 'Firebase & Gateway Rules', icon: Code2 },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              const pendingCount = orders.filter((o) => o.paymentStatus === 'pending').length;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-full transition-all whitespace-nowrap cursor-pointer shrink-0 ${
-                    isActive
-                      ? 'btn-gold-primary shadow-[0_0_15px_rgba(255,211,78,0.4)]'
-                      : 'bg-black/30 text-white/80 hover:text-white border border-white/15 hover:border-white/30'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                  {tab.id === 'orders' && pendingCount > 0 && (
-                    <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-400 text-black font-black text-[10px] animate-pulse shadow-sm">
-                      {pendingCount} New
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => scrollTabs('right')}
-            className="p-2 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 text-[#FFE7A3] hover:text-white shrink-0 transition-colors shadow-sm cursor-pointer"
-            title="Scroll tabs right"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Tab 1: Dashboard Overview */}
-        {activeTab === 'dashboard' && stats && (
-          <div className="space-y-6">
-            {/* URGENT PENDING ORDERS BANNER */}
-            {orders.some((o) => o.paymentStatus === 'pending') && (
-              <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-950/90 to-amber-900/80 border-2 border-amber-400 shadow-[0_0_35px_rgba(251,191,36,0.3)] space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="relative flex h-3.5 w-3.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
-                    </span>
-                    <div>
-                      <h4 className="text-base sm:text-lg font-black text-amber-200">
-                        🚨 {orders.filter((o) => o.paymentStatus === 'pending').length}টি নতুন অর্ডারের পেমেন্ট ভেরিফিকেশনের জন্য অপেক্ষমান!
-                      </h4>
-                      <p className="text-xs text-amber-300/80">
-                        ছাত্র-ছাত্রীরা টাকা পাঠিয়ে UTR সাবমিট করেছে। চেক করে অবিলম্বে অ্যাক্সেস দিন।
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setOrderStatusFilter('pending');
-                      setActiveTab('orders');
-                    }}
-                    className="btn-gold-primary px-4 py-2 text-xs font-black rounded-full cursor-pointer shadow-md shrink-0"
-                  >
-                    সকল পেন্ডিং অর্ডার দেখুন ({orders.filter((o) => o.paymentStatus === 'pending').length}) →
-                  </button>
-                </div>
-
-                <div className="divide-y divide-white/10 border border-white/15 rounded-2xl overflow-hidden bg-black/50">
-                  {orders
-                    .filter((o) => o.paymentStatus === 'pending')
-                    .slice(0, 4)
-                    .map((po) => (
-                      <div
-                        key={po.orderId}
-                        className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs hover:bg-white/5 transition-colors"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-black text-[#FFD34E] text-xs bg-black/60 px-2.5 py-0.5 rounded border border-white/20">
-                              {po.orderId}
-                            </span>
-                            <span className="font-extrabold text-white text-sm">{po.studentName}</span>
-                            {po.studentMobile && (
-                              <span className="text-[#FFE7A3] text-xs font-mono font-bold">📱 {po.studentMobile}</span>
-                            )}
-                            <span className="text-white/50 text-[11px]">({po.studentEmail})</span>
-                          </div>
-                          <div className="text-[11px] text-white/80 flex flex-wrap items-center gap-2">
-                            <span>
-                              Subjects: <strong className="text-[#FFE7A3]">{po.items.map((i) => i.subjectCode).join(', ')}</strong>
-                            </span>
-                            <span className="text-white/30">·</span>
-                            <span>
-                              Amount: <strong className="text-[#FFD34E] text-xs font-black">₹{po.totalAmount}</strong>
-                            </span>
-                            <span className="text-white/30">·</span>
-                            <span>
-                              UTR:{' '}
-                              <strong className="font-mono text-white bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/30">
-                                {po.paymentReference || 'N/A'}
-                              </strong>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => handleApproveOrder(po.orderId)}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-black text-xs flex items-center gap-1.5 shadow-md transition-transform hover:scale-105 cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Approve Access (অনুমোদন দিন)</span>
-                          </button>
-                          <button
-                            onClick={() => handleRejectOrder(po.orderId)}
-                            className="px-3 py-2 bg-rose-600/70 hover:bg-rose-600 text-white rounded-full text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="liquid-glass-master p-5 rounded-2xl border border-[#FFE7A3]/30 shadow-lg">
-                <span className="text-[11px] font-bold text-[#FFE7A3] uppercase tracking-wider block">
-                  Total Revenue
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-[#FFD34E] tabular-nums mt-1 block">
-                  ₹ {stats.totalRevenue}
-                </span>
-                <span className="text-[10px] text-emerald-400 font-semibold">
-                  {stats.verifiedOrders} verified sales
-                </span>
-              </div>
-
-              <div className="liquid-glass-master p-5 rounded-2xl border border-white/20 shadow-lg">
-                <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
-                  Total Orders
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tabular-nums mt-1 block">
-                  {stats.totalOrders}
-                </span>
-                <span className="text-[10px] text-white/50">All checkouts</span>
-              </div>
-
-              <div className="liquid-glass-master p-5 rounded-2xl border border-white/20 shadow-lg">
-                <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
-                  Active Students
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tabular-nums mt-1 block">
-                  {stats.totalStudents}
-                </span>
-                <span className="text-[10px] text-white/50">Registered students</span>
-              </div>
-
-              <div className="liquid-glass-master p-5 rounded-2xl border border-white/20 shadow-lg">
-                <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
-                  Question Banks
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tabular-nums mt-1 block">
-                  {stats.publishedSubjects}
-                </span>
-                <span className="text-[10px] text-[#FFE7A3] font-semibold">
-                  of {stats.totalSubjects} published
-                </span>
-              </div>
-
-              <div className="liquid-glass-master p-5 rounded-2xl border border-white/20 shadow-lg">
-                <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
-                  Bound Devices
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-[#FFD34E] tabular-nums mt-1 block">
-                  {stats.activeDevices}
-                </span>
-                <span className="text-[10px] text-emerald-400 font-semibold">1:1 Protected</span>
-              </div>
-            </div>
-
-            {/* Quick Actions Panel */}
-            <div className="liquid-glass-master p-6 sm:p-7 rounded-3xl border border-[#FFE7A3]/30 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-black text-white">
-                  Primary Task: Upload &amp; Publish Question Banks
-                </h3>
-                <p className="text-xs text-[#FFE7A3] mt-0.5">
-                  Admin workflow: Add subject → Upload PDF file → Set price in INR → Publish to student storefront.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setActiveTab('subjects');
-                  setIsAddingProduct(true);
-                }}
-                className="btn-gold-primary px-6 py-2.5 text-xs font-black rounded-full flex items-center gap-2 cursor-pointer shadow-md"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add New Question Bank</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Manage Semesters */}
-        {activeTab === 'semesters' && (
-          <div className="liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 p-6 sm:p-8 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div>
-                <h3 className="text-lg font-black text-white">Academic Semesters</h3>
-                <p className="text-xs text-[#FFE7A3]">
-                  Admin can add future semesters without modifying code.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsAddingSemester(true)}
-                className="btn-gold-primary px-4 py-2 text-xs font-black rounded-full flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Add Semester</span>
-              </button>
-            </div>
-
-            {isAddingSemester && (
-              <form onSubmit={handleCreateSemester} className="p-5 bg-black/40 rounded-2xl border border-white/20 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-white mb-1">Semester Number</label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      max={12}
-                      value={semNumber}
-                      onChange={(e) => setSemNumber(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-xs bg-black/40 border border-white/20 rounded-xl text-white"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-white mb-1">Title</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. BCA Semester 7 (Electives)"
-                      value={semTitle}
-                      onChange={(e) => setSemTitle(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-black/40 border border-white/20 rounded-xl text-white"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">Description</label>
-                  <input
-                    type="text"
-                    placeholder="Short summary of subjects..."
-                    value={semDesc}
-                    onChange={(e) => setSemDesc(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-black/40 border border-white/20 rounded-xl text-white"
-                  />
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="btn-gold-primary px-5 py-2 text-xs font-bold rounded-full cursor-pointer"
-                  >
-                    Save Semester
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingSemester(false)}
-                    className="px-4 py-2 text-xs text-white/70 hover:text-white cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <div className="divide-y divide-white/10 border border-white/15 rounded-2xl overflow-hidden bg-black/20">
-              {semesters.map((sem) => (
-                <div key={sem.id} className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm sm:text-base text-white">{sem.title}</span>
-                      <span className="text-xs text-[#FFE7A3]">({sem.academicYear})</span>
-                    </div>
-                    <p className="text-xs text-white/70 mt-0.5">{sem.description}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => toggleSemesterPublished(sem)}
-                      className={`px-4 py-1.5 text-xs font-bold rounded-full transition-colors cursor-pointer ${
-                        sem.published
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                          : 'bg-white/10 text-white/60'
-                      }`}
-                    >
-                      {sem.published ? 'Published' : 'Hidden'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Manage Subjects & PDFs */}
-        {activeTab === 'subjects' && (
-          <div className="liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 p-6 sm:p-8 space-y-6 shadow-2xl">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
-              <div>
-                <h3 className="text-lg font-black text-white">Manage Subjects &amp; Question Banks</h3>
-                <p className="text-xs text-[#FFE7A3]">
-                  Upload PDF question banks, set prices in ₹ INR, and publish to students.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleSyncOfficialSubjects}
-                  disabled={isSyncingFirebase}
-                  className="px-3.5 py-2 text-xs font-bold rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-50"
-                  title="Push all 11 BCA subjects and 3D covers to Firebase Firestore"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingFirebase ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingFirebase ? 'Syncing...' : 'Sync 11 Subjects to Firebase'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearTestData}
-                  disabled={isClearingData}
-                  className="px-3.5 py-2 text-xs font-bold rounded-full bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40 flex items-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-50"
-                  title="Clear all test orders and student data"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{isClearingData ? 'Clearing...' : 'Clear Test Data'}</span>
-                </button>
-                <button
-                  onClick={() => setIsAddingProduct(true)}
-                  className="btn-gold-primary px-4 py-2 text-xs font-black rounded-full flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md"
-                >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>Add Subject</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Add Subject Form */}
-            {isAddingProduct && (
-              <form onSubmit={handleCreateProduct} className="p-6 bg-black/40 rounded-2xl border border-white/20 space-y-4">
-                <div className="font-black text-xs uppercase tracking-wider text-[#FFD34E]">
-                  New Question Bank Details
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-white mb-1">Semester</label>
-                    <select
-                      value={prodSemesterId}
-                      onChange={(e) => setProdSemesterId(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white"
-                    >
-                      {semesters.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-[#3D0009] text-white">
-                          {s.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-white mb-1">Subject Code</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. BCA-203"
-                      value={prodCode}
-                      onChange={(e) => setProdCode(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white font-mono uppercase"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-white mb-1">Price (₹ INR)</label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={prodPrice}
-                      onChange={(e) => setProdPrice(Number(e.target.value))}
-                      className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white font-bold text-[#FFD34E]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">Subject Title</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Object Oriented Programming with Java"
-                    value={prodName}
-                    onChange={(e) => setProdName(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">Description</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Coverage details, university previous year question patterns..."
-                    value={prodDesc}
-                    onChange={(e) => setProdDesc(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">
-                    Syllabus Highlights (one per line)
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Unit 1: Classes & Inheritance&#10;Unit 2: Multithreading & Synchronization&#10;Unit 3: Java I/O Streams"
-                    value={prodHighlights}
-                    onChange={(e) => setProdHighlights(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">
-                    Book Cover Image URL (Optional)
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://example.com/cover-book.png or /assets/..."
-                    value={prodCoverUrl}
-                    onChange={(e) => setProdCoverUrl(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white"
-                  />
-                  <p className="text-[10px] text-white/50 mt-0.5">
-                    Leave blank to use the high-contrast default textbook cover graphic.
-                  </p>
-                </div>
-
-                {/* PDF File Upload */}
-                <div>
-                  <label className="block text-xs font-bold text-white mb-1">
-                    Upload PDF Question Bank File (Stored Privately)
-                  </label>
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setProdFile(e.target.files[0]);
-                      }
-                    }}
-                    className="text-xs text-white/70 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#FFD34E] file:text-[#3D0009] hover:file:bg-[#FFE7A3] cursor-pointer"
-                  />
-                  <p className="text-[10px] text-white/50 mt-1">
-                    File will be saved to protected private storage. If no file is selected, verified sample syllabus PDF is auto-generated.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="btn-gold-primary px-6 py-2.5 text-xs font-black rounded-full cursor-pointer shadow-md"
-                  >
-                    Save &amp; Publish Question Bank
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingProduct(false)}
-                    className="px-4 py-2 text-xs text-white/70 hover:text-white cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Product Table */}
-            <div className="divide-y divide-white/10 border border-white/15 rounded-2xl overflow-hidden bg-black/20">
-              {products.map((prod) => (
-                <div key={prod.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-3.5">
-                    {/* Subject Cover Thumbnail */}
-                    <div className="w-12 h-16 sm:w-14 sm:h-18 rounded-lg overflow-hidden bg-black/50 border border-[#FFD34E]/30 shrink-0 relative flex items-center justify-center shadow-md">
-                      {prod.coverImageUrl || prod.imageUrl ? (
-                        <img
-                          src={prod.coverImageUrl || prod.imageUrl}
-                          alt={prod.subjectName}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-white/40 p-1 text-center">
-                          <Image className="w-4 h-4 text-[#FFD34E]/60 mb-0.5" />
-                          <span className="text-[7.5px] font-bold text-[#FFE7A3]/70">No Image</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-[#FFD34E] bg-[#970014]/60 border border-[#FFE7A3]/40 px-2.5 py-0.5 rounded">
-                          {prod.subjectCode}
-                        </span>
-                        <h4 className="font-extrabold text-sm sm:text-base text-white">{prod.subjectName}</h4>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-white/70">
-                        <span>Price: <strong className="text-[#FFD34E] text-sm font-black">₹ {prod.price}</strong></span>
-                        {prod.originalPrice && (
-                          <span className="line-through text-white/40">₹ {prod.originalPrice}</span>
-                        )}
-                        <span>·</span>
-                        <span>{prod.pageCount} Pages</span>
-                        <span>·</span>
-                        <span className="truncate max-w-xs">{prod.examYear}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Edit Price & Image Button */}
-                    <button
-                      onClick={() => handleOpenEditProduct(prod)}
-                      className="px-3.5 py-1.5 text-xs font-bold rounded-full bg-[#FFD34E]/20 text-[#FFD34E] border border-[#FFD34E]/40 hover:bg-[#FFD34E] hover:text-[#3D0009] flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit Price &amp; Image</span>
-                    </button>
-
-                    <button
-                      onClick={() => toggleProductPublished(prod)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors cursor-pointer ${
-                        prod.published
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                          : 'bg-white/10 text-white/50'
-                      }`}
-                    >
-                      {prod.published ? 'Published' : 'Hidden'}
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteProduct(prod.id, prod.subjectCode)}
-                      className="p-2 text-white/40 hover:text-rose-400 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                      title="Delete Subject"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: Customer Orders & Sales Listing (Live 24/7 Tracking) */}
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
-            {/* Business Growth & Real-Time Live Status Banner */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#65000D]/90 via-[#3D0009]/95 to-[#240005] border border-[#FFD34E]/40 shadow-xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                  </span>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                      <span>Customer Sales &amp; Growth Listing</span>
-                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 rounded-full">
-                        🟢 24/7 Live Real-Time
-                      </span>
-                    </h3>
-                    <p className="text-xs text-[#FFE7A3]">
-                      কারা কারা কিনছে, কে কটা বিষয় কিনল এবং তাদের পেমেন্ট প্রুফ রিয়েল-টাইমে মনিটর করুন।
-                    </p>
-                  </div>
-                </div>
-
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-3.5 h-3.5 text-white/50 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchFilter}
-                    onChange={(e) => setSearchFilter(e.target.value)}
-                    placeholder="নাম, ফোন নম্বর, UTR বা অর্ডার আইডি খুঁজুন..."
-                    className="w-full pl-8 pr-3 py-2 text-xs bg-black/60 border border-white/20 rounded-full text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                  />
-                </div>
-              </div>
-
-              {/* Business Growth Metrics Row */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-black/40 p-3.5 rounded-2xl border border-white/10">
-                  <span className="text-[11px] font-bold text-[#FFE7A3] block">👥 মোট শিক্ষার্থী</span>
-                  <span className="text-xl sm:text-2xl font-black text-white block mt-0.5">
-                    {new Set(orders.map((o) => o.studentEmail?.toLowerCase()).filter(Boolean)).size || orders.length}
-                  </span>
-                  <span className="text-[10px] text-white/50">নিবন্ধিত ক্রেতা</span>
-                </div>
-
-                <div className="bg-black/40 p-3.5 rounded-2xl border border-white/10">
-                  <span className="text-[11px] font-bold text-emerald-300 block">💰 মোট বিক্রয় রেভিনিউ</span>
-                  <span className="text-xl sm:text-2xl font-black text-[#FFD34E] block mt-0.5">
-                    ₹{orders.filter((o) => o.paymentStatus === 'verified').reduce((s, o) => s + (o.totalAmount || 0), 0)}
-                  </span>
-                  <span className="text-[10px] text-emerald-400/80">
-                    {orders.filter((o) => o.paymentStatus === 'verified').length}টি সফল অর্ডার
-                  </span>
-                </div>
-
-                <div className="bg-black/40 p-3.5 rounded-2xl border border-white/10">
-                  <span className="text-[11px] font-bold text-blue-300 block">📦 মোট পঠিত বিষয়</span>
-                  <span className="text-xl sm:text-2xl font-black text-white block mt-0.5">
-                    {orders
-                      .filter((o) => o.paymentStatus === 'verified')
-                      .reduce((s, o) => s + (o.items?.length || o.selectedProductIds?.length || 1), 0)}টি
-                  </span>
-                  <span className="text-[10px] text-white/50">প্রশ্নপত্র আনলকড</span>
-                </div>
-
-                <div className="bg-black/40 p-3.5 rounded-2xl border border-amber-400/40">
-                  <span className="text-[11px] font-bold text-amber-300 block">⏳ যাচাইকরণ বাকি</span>
-                  <span className="text-xl sm:text-2xl font-black text-amber-200 block mt-0.5">
-                    {orders.filter((o) => o.paymentStatus === 'pending').length}টি
-                  </span>
-                  <span className="text-[10px] text-amber-300/80">অনুমোদনের অপেক্ষায়</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex flex-wrap items-center gap-2 pb-1">
-              <button
-                type="button"
-                onClick={() => setOrderStatusFilter('all')}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  orderStatusFilter === 'all'
-                    ? 'btn-gold-primary shadow-sm'
-                    : 'bg-black/30 text-white/70 hover:text-white border border-white/15'
-                }`}
-              >
-                সকল অর্ডার ({orders.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderStatusFilter('pending')}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  orderStatusFilter === 'pending'
-                    ? 'bg-amber-400 text-black font-black shadow-md'
-                    : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/40'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>যাচাইকরণ বাকি ({orders.filter((o) => o.paymentStatus === 'pending').length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderStatusFilter('verified')}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  orderStatusFilter === 'verified'
-                    ? 'bg-emerald-500 text-black font-black shadow-md'
-                    : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-400/40'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>অনুমোদিত ও সক্রিয় ({orders.filter((o) => o.paymentStatus === 'verified').length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderStatusFilter('rejected')}
-                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  orderStatusFilter === 'rejected'
-                    ? 'bg-rose-500 text-white font-black shadow-md'
-                    : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-400/40'
-                }`}
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>ফেক / বাতিল ({orders.filter((o) => o.paymentStatus === 'rejected' || o.paymentStatus === 'failed').length})</span>
-              </button>
-            </div>
-
-            {/* Orders Table */}
-            <div className="overflow-x-auto border border-white/15 rounded-2xl bg-black/30 shadow-2xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-black/60 text-[#FFE7A3] uppercase font-bold text-[10px] tracking-wider border-b border-white/10">
-                  <tr>
-                    <th className="p-3.5">অর্ডার ও তারিখ</th>
-                    <th className="p-3.5">শিক্ষার্থীর তথ্য (Customer)</th>
-                    <th className="p-3.5">কে কটা বিষয় কিনল (Subjects)</th>
-                    <th className="p-3.5">মোট মূল্য</th>
-                    <th className="p-3.5">পেমেন্ট UTR প্রুফ</th>
-                    <th className="p-3.5">বর্তমান স্ট্যাটাস</th>
-                    <th className="p-3.5 text-center">অনুমোদন / ফেক রিজেক্ট</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {orders
-                    .filter((o) => {
-                      if (orderStatusFilter === 'pending' && o.paymentStatus !== 'pending') return false;
-                      if (orderStatusFilter === 'verified' && o.paymentStatus !== 'verified') return false;
-                      if (
-                        orderStatusFilter === 'rejected' &&
-                        o.paymentStatus !== 'rejected' &&
-                        o.paymentStatus !== 'failed'
-                      )
-                        return false;
-                      if (searchFilter.trim()) {
-                        const q = searchFilter.toLowerCase();
-                        const match =
-                          o.orderId.toLowerCase().includes(q) ||
-                          o.studentName.toLowerCase().includes(q) ||
-                          o.studentEmail.toLowerCase().includes(q) ||
-                          (o.studentMobile && o.studentMobile.includes(q)) ||
-                          (o.paymentReference && o.paymentReference.toLowerCase().includes(q));
-                        if (!match) return false;
-                      }
-                      return true;
-                    })
-                    .length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-10 text-center text-white/50">
-                        {orderStatusFilter === 'pending'
-                          ? '✓ কোনো পেন্ডিং অর্ডার নেই। সকল পেমেন্ট অনুমোদিত।'
-                          : 'কোনো মিল পাওয়া যায়নি (No matching orders found)।'}
-                      </td>
-                    </tr>
-                  ) : (
-                    orders
-                      .filter((o) => {
-                        if (orderStatusFilter === 'pending' && o.paymentStatus !== 'pending') return false;
-                        if (orderStatusFilter === 'verified' && o.paymentStatus !== 'verified') return false;
-                        if (
-                          orderStatusFilter === 'rejected' &&
-                          o.paymentStatus !== 'rejected' &&
-                          o.paymentStatus !== 'failed'
-                        )
-                          return false;
-                        if (searchFilter.trim()) {
-                          const q = searchFilter.toLowerCase();
-                          const match =
-                            o.orderId.toLowerCase().includes(q) ||
-                            o.studentName.toLowerCase().includes(q) ||
-                            o.studentEmail.toLowerCase().includes(q) ||
-                            (o.studentMobile && o.studentMobile.includes(q)) ||
-                            (o.paymentReference && o.paymentReference.toLowerCase().includes(q));
-                          if (!match) return false;
-                        }
-                        return true;
-                      })
-                      .map((o) => {
-                        const cleanMobile = (o.studentMobile || '').replace(/\D/g, '');
-                        const subjectsCount = o.items?.length || o.selectedProductIds?.length || 1;
-                        const cleanUtr = (o.paymentReference || '').replace('upi_', '');
-
-                        return (
-                          <tr key={o.orderId} className="hover:bg-white/5 transition-colors">
-                            {/* Order ID & Date */}
-                            <td className="p-3.5">
-                              <span className="font-mono font-bold text-white block">{o.orderId}</span>
-                              <span className="text-[10px] text-white/60">
-                                {new Date(o.createdAt).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                            </td>
-
-                            {/* Student Details with WhatsApp direct chat */}
-                            <td className="p-3.5">
-                              <div className="space-y-0.5">
-                                <span className="font-extrabold text-sm text-white block">{o.studentName}</span>
-                                {o.studentMobile && (
-                                  <div className="flex items-center gap-1.5 text-xs text-[#FFE7A3]">
-                                    <span className="font-mono font-bold">📱 {o.studentMobile}</span>
-                                    {cleanMobile.length >= 10 && (
-                                      <a
-                                        href={`https://wa.me/91${cleanMobile}?text=${encodeURIComponent(
-                                          `Hello ${o.studentName}, This is BCA STUDY POINT regarding your order ${o.orderId}.`
-                                        )}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline"
-                                        title="WhatsApp Message"
-                                      >
-                                        [Chat]
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
-                                <span className="text-[10px] text-white/50 block truncate max-w-[170px]">
-                                  {o.studentEmail}
-                                </span>
-                                {o.collegeName && (
-                                  <span className="text-[9.5px] text-white/40 block truncate max-w-[170px]">
-                                    🏛️ {o.collegeName}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* Subjects & Quantity */}
-                            <td className="p-3.5">
-                              <div className="space-y-1">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FFD34E]/20 text-[#FFD34E] border border-[#FFD34E]/40">
-                                  {subjectsCount}টি বিষয় কেনা হয়েছে
-                                </span>
-                                <div className="flex flex-wrap gap-1 max-w-xs">
-                                  {o.items && o.items.length > 0 ? (
-                                    o.items.map((it) => (
-                                      <span
-                                        key={it.productId}
-                                        className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white/90 border border-white/15"
-                                        title={it.subjectName}
-                                      >
-                                        {it.subjectCode}
-                                      </span>
-                                    ))
-                                  ) : (
-                                    (o.selectedProductIds || []).map((pid) => {
-                                      const fb = FALLBACK_PRODUCTS.find((p) => p.id === pid);
-                                      return (
-                                        <span
-                                          key={pid}
-                                          className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white/90 border border-white/15"
-                                        >
-                                          {fb?.subjectCode || pid}
-                                        </span>
-                                      );
-                                    })
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Total Amount */}
-                            <td className="p-3.5">
-                              <span className="font-black text-[#FFD34E] text-base tabular-nums">
-                                ₹{o.totalAmount}
-                              </span>
-                            </td>
-
-                            {/* Payment UTR Proof */}
-                            <td className="p-3.5">
-                              <div className="space-y-0.5">
-                                <span className="font-mono text-xs font-black text-white bg-black/60 px-2 py-0.5 rounded border border-white/20 select-all block max-w-fit">
-                                  {cleanUtr || 'N/A'}
-                                </span>
-                                <span className="text-[10px] text-white/50 block">BharatPe UPI</span>
-                              </div>
-                            </td>
-
-                            {/* Status */}
-                            <td className="p-3.5">
-                              {o.paymentStatus === 'verified' ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/50">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span>অনুমোদিত ও সক্রিয়</span>
-                                </span>
-                              ) : o.paymentStatus === 'rejected' || o.paymentStatus === 'failed' ? (
-                                <div>
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/50">
-                                    <X className="w-3.5 h-3.5 text-rose-400" />
-                                    <span>ফেক / বাতিল</span>
-                                  </span>
-                                  {o.rejectionReason && (
-                                    <span className="text-[9.5px] text-rose-300/80 block mt-0.5 max-w-[130px] truncate" title={o.rejectionReason}>
-                                      {o.rejectionReason}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-200 border border-amber-400/60 animate-pulse">
-                                  <Clock className="w-3.5 h-3.5 text-amber-300" />
-                                  <span>যাচাইকরণ বাকি</span>
-                                </span>
-                              )}
-                            </td>
-
-                            {/* Action / Approval / Reject Fake Buttons */}
-                            <td className="p-3.5 text-center whitespace-nowrap">
-                              <div className="flex items-center justify-center gap-2">
-                                {o.paymentStatus === 'pending' ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleApproveOrder(o.orderId)}
-                                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-black flex items-center gap-1 shadow-sm transition-transform hover:scale-105 cursor-pointer"
-                                      title="Approve access and unlock question bank"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>অনুমোদন দিন</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setRejectingOrder(o);
-                                        setRejectReasonText('ফেক পেমেন্ট রসিদ / ভুল UTR');
-                                      }}
-                                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold transition-colors cursor-pointer"
-                                      title="Reject fake payment receipt"
-                                    >
-                                      <span>ফেক রিজেক্ট</span>
-                                    </button>
-                                  </>
-                                ) : o.paymentStatus === 'verified' ? (
-                                  <button
-                                    onClick={() => {
-                                      setRejectingOrder(o);
-                                      setRejectReasonText('অ্যাক্সেস প্রত্যাহার / ফেক পেমেন্ট');
-                                    }}
-                                    className="px-2.5 py-1 text-[11px] text-rose-300 hover:text-white bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 rounded-full transition-colors cursor-pointer"
-                                    title="Revoke student access"
-                                  >
-                                    Revoke
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleApproveOrder(o.orderId)}
-                                    className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/50 rounded-full text-xs font-bold hover:bg-amber-500/30 cursor-pointer"
-                                    title="Re-approve access"
-                                  >
-                                    পুনরায় সক্রিয় করুন
-                                  </button>
-                                )}
-
-                                {/* Delete order */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteOrder(o.orderId, o.studentName)}
-                                  className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/20 rounded-lg transition-colors cursor-pointer"
-                                  title="অর্ডার রেকর্ড মুছে ফেলুন"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* REJECT FAKE PAYMENT MODAL */}
-            {rejectingOrder && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-                <div className="liquid-glass-master rounded-3xl max-w-md w-full p-6 border border-rose-500/40 shadow-2xl space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/40">
-                      <AlertCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-base text-white">ফেক পেমেন্ট রসিদ রিজেক্ট করুন</h4>
-                      <p className="text-xs text-rose-300 font-mono">
-                        {rejectingOrder.orderId} · {rejectingOrder.studentName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-white/80 leading-relaxed">
-                    এই শিক্ষার্থীর জন্য পিডিএফ নোটস অ্যাক্সেস ব্লক করে দেওয়া হবে।
-                  </p>
-
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-white">
-                      বাতিলের কারণ নির্বাচন করুন:
-                    </label>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {[
-                        'ফেক পেমেন্ট রসিদ / এডিটেড স্ক্রিনশট',
-                        'ভুল বা অস্তিত্বহীন UTR / ট্রানজ্যাকশন নম্বর',
-                        'আমাদের ব্যাঙ্ক অ্যাকাউন্টে টাকা জমা হয়নি',
-                        'কম টাকা পাঠানো হয়েছে',
-                      ].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => setRejectReasonText(preset)}
-                          className={`text-left text-xs px-3 py-2 rounded-xl transition-all cursor-pointer ${
-                            rejectReasonText === preset
-                              ? 'bg-rose-600 text-white font-bold border border-rose-400'
-                              : 'bg-black/40 text-white/80 hover:bg-white/10 border border-white/15'
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      ))}
-                    </div>
-
-                    <input
-                      type="text"
-                      value={rejectReasonText}
-                      onChange={(e) => setRejectReasonText(e.target.value)}
-                      placeholder="কাস্টম কারণ লিখুন..."
-                      className="w-full mt-2 px-3.5 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-rose-400"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => setRejectingOrder(null)}
-                      className="px-4 py-2 text-xs text-white/70 hover:text-white cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSubmittingReject}
-                      onClick={handleConfirmRejectOrder}
-                      className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-full cursor-pointer shadow-md flex items-center gap-1.5"
-                    >
-                      {isSubmittingReject ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>বাতিল করা হচ্ছে...</span>
-                        </>
-                      ) : (
-                        <span>অর্ডার বাতিল ও রিজেক্ট করুন</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 5: Device Management (1 Student = 1 Device Policy & Remote Device Removal) */}
-        {activeTab === 'devices' && (
-          <div className="liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 p-6 sm:p-8 space-y-5 shadow-2xl">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-black text-white">
-                    Student Connected Devices (1 Student = 1 Device)
-                  </h3>
-                  <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 rounded-full">
-                    Active Binding Policy
-                  </span>
-                </div>
-                <p className="text-xs text-[#FFE7A3] mt-0.5">
-                  ছাত্রছাত্রীরা কোন ডিভাইসে কানেক্ট রয়েছে (মোবাইল ক্রোম নাকি ডেস্কটপ ক্রোম) তা দেখুন এবং অননুমোদিত ডিভাইস রিমুভ করুন।
-                </p>
-              </div>
-
-              {/* Search */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="ছাত্রের নাম বা ইমেল দিয়ে খুঁজুন..."
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-full text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
-            </div>
-
-            {/* Device Analytics Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
-                <span className="text-white/70 block text-[11px]">মোট রেজিস্টার্ড ডিভাইস</span>
-                <span className="text-2xl font-black text-[#FFD34E] block mt-1">
-                  {devices.length}
-                </span>
-                <span className="text-[10px] text-emerald-400">1:1 Protected</span>
-              </div>
-
-              <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
-                <span className="text-white/70 block text-[11px]">📱 মোবাইল ক্রোম / সাফারি ইউজার</span>
-                <span className="text-2xl font-black text-white block mt-1">
-                  {devices.filter((d) => d.os?.toLowerCase().includes('mobile') || d.os?.toLowerCase().includes('android') || d.os?.toLowerCase().includes('iphone')).length}
-                </span>
-                <span className="text-[10px] text-white/50">মোবাইলে অধ্যয়নরত</span>
-              </div>
-
-              <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
-                <span className="text-white/70 block text-[11px]">💻 ডেস্কটপ / ল্যাপটপ ইউজার</span>
-                <span className="text-2xl font-black text-white block mt-1">
-                  {devices.filter((d) => !d.os?.toLowerCase().includes('mobile') && !d.os?.toLowerCase().includes('android') && !d.os?.toLowerCase().includes('iphone')).length}
-                </span>
-                <span className="text-[10px] text-white/50">পিসি ব্রাউজার</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto border border-white/15 rounded-2xl bg-black/20 shadow-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-black/50 text-[#FFE7A3] uppercase font-bold text-[10px] tracking-wider border-b border-white/10">
-                  <tr>
-                    <th className="p-3.5">শিক্ষার্থীর নাম</th>
-                    <th className="p-3.5">কানেক্টেড ডিভাইস ও ওএস (Device)</th>
-                    <th className="p-3.5">ব্রাউজার ও স্ক্রিন রেজোলিউশন</th>
-                    <th className="p-3.5">আইপি এড্রেস</th>
-                    <th className="p-3.5">বাইন্ডিং স্ট্যাটাস</th>
-                    <th className="p-3.5">রিসেট হিস্ট্রি</th>
-                    <th className="p-3.5 text-right">ডিভাইস কন্ট্রোল</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {devices.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-white/50">
-                        এখনও কোনো ডিভাইস রেজিস্টার হয়নি। স্টুডেন্ট প্রথমবার পিডিএফ ওপেন করলে তার ডিভাইস স্বয়ংক্রিয়ভাবে লক হয়ে যাবে।
-                      </td>
-                    </tr>
-                  ) : (
-                    devices
-                      .filter(
-                        (d) =>
-                          !searchFilter ||
-                          d.userEmail.toLowerCase().includes(searchFilter.toLowerCase()) ||
-                          d.studentName.toLowerCase().includes(searchFilter.toLowerCase())
-                      )
-                      .map((d) => {
-                        const isMobile =
-                          d.os?.toLowerCase().includes('mobile') ||
-                          d.os?.toLowerCase().includes('android') ||
-                          d.os?.toLowerCase().includes('iphone');
-
-                        return (
-                          <tr key={d.id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-3.5">
-                              <span className="font-extrabold text-white block">{d.studentName}</span>
-                              <span className="text-[10px] text-white/50">{d.userEmail}</span>
-                            </td>
-                            <td className="p-3.5">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-white border border-white/15">
-                                {isMobile ? '📱' : '💻'} {d.os}
-                              </span>
-                            </td>
-                            <td className="p-3.5">
-                              <span className="block font-semibold text-white">{d.browser}</span>
-                              <span className="text-[10px] text-white/50">{d.deviceDescription}</span>
-                            </td>
-                            <td className="p-3.5 font-mono text-[11px] text-[#FFE7A3]">{d.lastIp}</td>
-                            <td className="p-3.5">
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                  d.registrationStatus === 'active'
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                                    : 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
-                                }`}
-                              >
-                                {d.registrationStatus === 'active' ? '1:1 ACTIVE' : 'REVOKED'}
-                              </span>
-                            </td>
-                            <td className="p-3.5 tabular-nums font-bold text-[#FFD34E]">
-                              {d.resetCount} বার
-                            </td>
-                            <td className="p-3.5 text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-2">
-                                {/* Reset Device Button */}
-                                <button
-                                  onClick={() => setSelectedDeviceUser(d)}
-                                  className="px-3 py-1 text-xs font-bold text-amber-200 bg-amber-950/60 hover:bg-amber-900 border border-amber-500/40 rounded-full transition-colors cursor-pointer"
-                                  title="Reset device binding (student can bind new device)"
-                                >
-                                  রিসেট করুন
-                                </button>
-
-                                {/* Remove Device Permanently Button */}
-                                <button
-                                  onClick={() => handleDeleteDevice(d.userId, d.studentName)}
-                                  className="px-3 py-1 text-xs font-bold text-rose-300 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 rounded-full transition-colors cursor-pointer"
-                                  title="Remove device completely"
-                                >
-                                  রিমুভ
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Device Reset Modal */}
-            {selectedDeviceUser && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                <div className="liquid-glass-master rounded-3xl max-w-md w-full p-6 border border-white/20 shadow-2xl space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                      <AlertCircle className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-base text-white">Authorize Device Reset</h4>
-                      <p className="text-xs text-[#FFE7A3]">{selectedDeviceUser.userEmail}</p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-white/80 leading-relaxed">
-                    এই শিক্ষার্থীর বর্তমান ডিভাইস ({selectedDeviceUser.os}) আনবাইন্ড করা হবে। শিক্ষার্থী তার নতুন ডিভাইসে পরবর্তী লগইনে যুক্ত হতে পারবে।
-                  </p>
-
-                  <div>
-                    <label className="block text-xs font-bold text-white mb-1">
-                      রিসেটের কারণ (অডিট লগ):
-                    </label>
-                    <input
-                      type="text"
-                      value={resetReason}
-                      onChange={(e) => setResetReason(e.target.value)}
-                      placeholder="e.g. নতুন মোবাইল কিনেছে / ফোন পরিবর্তন করেছে"
-                      className="w-full px-3.5 py-2 text-xs bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-[#FFD34E]"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      onClick={() => setSelectedDeviceUser(null)}
-                      className="px-4 py-2 text-xs text-white/70 hover:text-white cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleExecuteDeviceReset}
-                      className="btn-gold-primary px-5 py-2 text-xs font-black rounded-full cursor-pointer shadow-md"
-                    >
-                      রিসেট অনুমোদন করুন
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 6: Security Audit Logs */}
-        {activeTab === 'audit' && (
-          <div className="liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 p-6 sm:p-8 space-y-4 shadow-2xl">
-            <div>
-              <h3 className="text-lg font-black text-white">Security &amp; Administrative Audit Logs</h3>
-              <p className="text-xs text-[#FFE7A3]">
-                Immutable record of subject creations, price updates, verified payments, and device resets.
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-radial-[at_50%_0%] from-[#970014] via-[#65000D] to-[#240005] text-white flex selection:bg-[#FFD34E] selection:text-[#3D0009]">
+      {/* Sidebar (Sticky Desktop + Mobile Drawer) */}
+      <AdminSidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        pendingOrdersCount={pendingOrders.length}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+        onExitToStorefront={onExit}
+        onLogout={handleLogout}
+      />
+
+      {/* Right Main Column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Sticky Brand-Themed Top Bar */}
+        <header className="sticky top-0 z-30 bg-[#3D0009]/90 backdrop-blur-xl border-b border-[#FFE7A3]/25 px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-[#FFE7A3] hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
+              aria-label="Open Navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-extrabold text-white truncate">
+                {currentMeta.title}
+              </h1>
+              <p className="hidden sm:block text-[11px] text-[#FFE7A3]/70 truncate">
+                {currentMeta.subtitle}
               </p>
             </div>
-
-            <div className="divide-y divide-white/10 border border-white/15 rounded-2xl overflow-hidden text-xs bg-black/20">
-              {auditLogs.map((log) => (
-                <div key={log.id} className="p-4 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-[#FFD34E] bg-[#970014]/60 px-2 py-0.5 rounded text-[10px]">
-                        {log.action}
-                      </span>
-                      <span className="text-white/40">·</span>
-                      <span className="text-[#FFE7A3]">Admin: {log.adminId}</span>
-                    </div>
-                    <p className="text-white font-medium">{log.details}</p>
-                  </div>
-                  <span className="text-white/50 font-mono text-[11px] whitespace-nowrap">
-                    {new Date(log.timestamp).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
-        )}
 
-        {/* Tab 7: Configuration Guide */}
-        {activeTab === 'config' && (
-          <div className="liquid-glass-master rounded-3xl border border-[#FFE7A3]/30 p-6 sm:p-8 space-y-6 shadow-2xl">
-            <div>
-              <h3 className="text-lg font-black text-white">
-                Production Configuration &amp; Security Rules
-              </h3>
-              <p className="text-xs text-[#FFE7A3]">
-                Environment variables, Firebase Firestore rules, and Razorpay setup instructions.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-[#FFD34E] uppercase tracking-wider">
-                  1. Environment Variables (.env)
-                </h4>
-                <pre className="p-4 bg-black/50 text-[#FFE7A3] rounded-xl text-[11px] font-mono overflow-x-auto border border-white/10">
-{`# Razorpay Gateway
-RAZORPAY_KEY_ID="rzp_live_..."
-RAZORPAY_KEY_SECRET="..."
-RAZORPAY_WEBHOOK_SECRET="..."
-
-# Admin Security
-ADMIN_SECRET_KEY="152006"
-
-# App Port
-PORT=3000`}
-                </pre>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-[#FFD34E] uppercase tracking-wider">
-                  2. Firestore Security Rules (firestore.rules)
-                </h4>
-                <pre className="p-4 bg-black/50 text-white/90 rounded-xl text-[11px] font-mono overflow-x-auto max-h-56 border border-white/10">
-{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /semesters/{id} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
-    }
-    match /products/{id} {
-      allow read: if resource.data.published == true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
-    }
-  }
-}`}
-                </pre>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Real-time Edit Subject & Price Modal */}
-        {editingProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md">
-            <div className="liquid-glass-master rounded-3xl max-w-lg w-full p-5 sm:p-7 border border-[#FFE7A3]/30 shadow-2xl relative text-left">
-              <button
-                onClick={() => setEditingProduct(null)}
-                className="absolute top-4 right-4 p-1.5 text-white/60 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/15">
-                <div className="w-10 h-10 rounded-xl bg-[#FFD34E]/20 border border-[#FFD34E]/40 flex items-center justify-center text-[#FFD34E]">
-                  <Edit3 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-white">
-                    Edit Subject: {editingProduct.subjectCode}
-                  </h3>
-                  <p className="text-xs text-[#FFE7A3]">
-                    Firebase Firestore Real-time Sync (দোকানে তৎক্ষণাৎ আপডেট হবে)
-                  </p>
-                </div>
-              </div>
-
-              {editError && (
-                <div className="mb-3.5 p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-200">
-                  {editError}
-                </div>
-              )}
-
-              <form onSubmit={handleSaveProductEdit} className="space-y-3.5 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-white mb-1">
-                      Selling Price (₹) <span className="text-[#FFD34E]">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      value={editPrice}
-                      onChange={(e) => setEditPrice(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-black/50 border border-[#FFD34E]/50 rounded-xl text-[#FFD34E] font-bold text-sm focus:outline-none focus:ring-1 focus:ring-[#FFD34E]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-white mb-1">
-                      Original / MRP Cut Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editOriginalPrice}
-                      onChange={(e) => setEditOriginalPrice(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-black/50 border border-white/20 rounded-xl text-white/70 text-sm focus:outline-none focus:border-[#FFD34E]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-white mb-1">
-                    Subject Image / Thumbnail URL
-                  </label>
-                  <input
-                    type="text"
-                    value={editImageUrl}
-                    onChange={(e) => setEditImageUrl(e.target.value)}
-                    placeholder="https://... or /assets/aistudio/..."
-                    className="w-full px-3 py-2 bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-[#FFD34E]"
-                  />
-                  
-                  {/* Preset Image Shortcuts */}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="text-[10px] text-white/50">Quick Presets:</span>
-                    <button
-                      type="button"
-                      onClick={() => setEditImageUrl('/assets/aistudio/BCA_Study_Point_Special_Offer_3cca2cdd.png')}
-                      className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-[#FFE7A3]"
-                    >
-                      Offer Banner
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditImageUrl('/assets/aistudio/BCA_Study_Point_Subjects_Banner_4b0de4c1.png')}
-                      className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-[#FFE7A3]"
-                    >
-                      Subjects Banner
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditImageUrl(BRAND.logoUrl)}
-                      className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-[#FFE7A3]"
-                    >
-                      Official Logo
-                    </button>
-                    {editImageUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setEditImageUrl('')}
-                        className="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[10px]"
-                      >
-                        Clear Image
-                      </button>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Global Quick Customer / Order Search */}
+            <div className="relative hidden md:block w-64">
+              <Search className="w-3.5 h-3.5 text-[#FFD34E]/80 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={quickJump}
+                onChange={(e) => setQuickJump(e.target.value)}
+                placeholder="Quick find customer or order..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-white/15 bg-black/45 text-white placeholder-white/45 focus:outline-none focus:ring-2 focus:ring-[#FFD34E]/25 focus:border-[#FFD34E]"
+              />
+              {quickMatchResults &&
+                (quickMatchResults.matchedCustomers.length > 0 ||
+                  quickMatchResults.matchedOrders.length > 0) && (
+                  <div className="absolute right-0 mt-1.5 w-80 liquid-glass-master rounded-2xl border border-[#FFE7A3]/30 shadow-2xl p-2 z-50 space-y-2 text-left text-white">
+                    {quickMatchResults.matchedCustomers.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[10px] font-bold uppercase text-[#FFE7A3]/70">
+                          Customers
+                        </div>
+                        {quickMatchResults.matchedCustomers.map((c) => (
+                          <button
+                            key={c.customerId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCustomer(c);
+                              setQuickJump('');
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs flex items-center justify-between cursor-pointer"
+                          >
+                            <span className="font-bold text-white truncate">{c.fullName}</span>
+                            <span className="text-[11px] text-[#FFE7A3]/80">{c.mobile}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  </div>
-                </div>
-
-                {/* Image Live Preview */}
-                {editImageUrl && (
-                  <div className="p-2.5 bg-black/40 rounded-xl border border-white/10 flex items-center gap-3">
-                    <div className="w-14 h-18 rounded-lg overflow-hidden bg-black/60 border border-[#FFD34E]/40 shrink-0">
-                      <img
-                        src={editImageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <span className="text-white font-bold block">Live Image Preview</span>
-                      <span className="text-[10px] text-emerald-400">✓ Image ready to attach</span>
-                    </div>
+                    {quickMatchResults.matchedOrders.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[10px] font-bold uppercase text-[#FFE7A3]/70">
+                          Orders
+                        </div>
+                        {quickMatchResults.matchedOrders.map((o) => (
+                          <button
+                            key={o.orderId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrder(o);
+                              setQuickJump('');
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/10 text-xs flex items-center justify-between cursor-pointer"
+                          >
+                            <span className="font-mono font-bold text-[#FFD34E]">{o.orderId}</span>
+                            <span className="text-[11px] text-white/75 truncate max-w-[140px]">
+                              {o.studentName}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+            </div>
 
-                <div>
-                  <label className="block font-bold text-white mb-1">Subject Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={editSubjectName}
-                    onChange={(e) => setEditSubjectName(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/50 border border-white/20 rounded-xl text-white focus:outline-none focus:border-[#FFD34E]"
-                  />
-                </div>
+            {pendingOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('orders')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-200 border border-amber-400/40 hover:bg-amber-500/30 cursor-pointer"
+              >
+                <Bell className="w-3.5 h-3.5 text-[#FFD34E]" />
+                <span className="tabular-nums">{pendingOrders.length}</span>
+                <span className="hidden sm:inline">Pending</span>
+              </button>
+            )}
 
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/15">
-                  <button
-                    type="button"
-                    onClick={() => setEditingProduct(null)}
-                    className="px-4 py-2 text-xs text-white/70 hover:text-white cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingEdit}
-                    className="btn-gold-primary px-5 py-2 rounded-full text-xs font-bold cursor-pointer flex items-center gap-1.5"
-                  >
-                    {isSavingEdit ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Syncing to Firebase...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Save &amp; Sync Real-Time</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+            <button
+              type="button"
+              onClick={loadAllData}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#FFE7A3] bg-white/10 hover:bg-white/20 border border-[#FFE7A3]/25 cursor-pointer disabled:opacity-60"
+              title="Refresh live data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#FFD34E]' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Global Toast Feedback Banner */}
+        {toast && (
+          <div className="px-4 sm:px-6 pt-4">
+            <div
+              className={`rounded-2xl px-4 py-3 text-xs font-semibold flex items-center justify-between gap-3 border shadow-md backdrop-blur-md ${
+                toast.isError
+                  ? 'bg-rose-950/85 text-rose-200 border-rose-400/40'
+                  : 'bg-emerald-950/85 text-emerald-200 border-emerald-400/40'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {toast.isError ? (
+                  <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                )}
+                <span>{toast.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="text-[11px] font-bold opacity-80 hover:opacity-100 cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         )}
+
+        {/* Active View Content */}
+        <main className="flex-1 min-w-0 p-3 sm:p-5 lg:p-6 max-w-[1680px] w-full mx-auto">
+          {activeTab === 'dashboard' && (
+            <AdminDashboardView
+              stats={stats}
+              pendingOrders={pendingOrders}
+              dateRange={dateRange}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChangeDateRange={setDateRange}
+              onChangeCustomDates={(s, e) => {
+                setCustomStartDate(s);
+                setCustomEndDate(e);
+              }}
+              onNavigateTab={setActiveTab}
+              onSelectOrder={setSelectedOrder}
+              onApproveOrder={handleApproveOrder}
+              onRejectOrderClick={setRejectingOrder}
+            />
+          )}
+
+          {activeTab === 'orders' && (
+            <AdminOrdersView
+              orders={orders}
+              onApproveOrder={handleApproveOrder}
+              onRejectOrderClick={setRejectingOrder}
+              onDeleteOrderClick={setDeleteOrderTarget}
+              onSelectOrder={setSelectedOrder}
+            />
+          )}
+
+          {activeTab === 'customers' && (
+            <AdminCustomersView
+              customers={customers}
+              onSelectCustomer={setSelectedCustomer}
+              onDeleteCustomerClick={setDeleteCustomerTarget}
+            />
+          )}
+
+          {activeTab === 'products' && (
+            <AdminProductsView
+              products={products}
+              semesters={semesters}
+              onRefresh={loadAllData}
+              onSyncAllToFirebase={handleSyncAllToFirebase}
+              onNotify={notify}
+            />
+          )}
+
+          {activeTab === 'packages' && (
+            <AdminPackagesView
+              products={products}
+              packages={packages}
+              effectivePricing={effectivePricing}
+              onRefresh={loadAllData}
+              onNotify={notify}
+            />
+          )}
+
+          {activeTab === 'offers' && (
+            <AdminOffersView
+              offers={offers}
+              effectivePricing={effectivePricing}
+              onRefresh={loadAllData}
+              onNotify={notify}
+            />
+          )}
+
+          {activeTab === 'banners' && (
+            <AdminBannersView
+              banners={banners}
+              onRefresh={loadAllData}
+              onNotify={notify}
+            />
+          )}
+
+          {activeTab === 'website' && (
+            <AdminWebsiteView
+              siteSettings={siteSettings}
+              products={products}
+              onRefresh={loadAllData}
+              onNotify={notify}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <AdminReportsView
+              dateRange={dateRange}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+              onChangeDateRange={setDateRange}
+              onChangeCustomDates={(s, e) => {
+                setCustomStartDate(s);
+                setCustomEndDate(e);
+              }}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <AdminSettingsView
+              semesters={semesters}
+              devices={devices}
+              auditLogs={auditLogs}
+              onRefresh={loadAllData}
+              onSyncAllToFirebase={handleSyncAllToFirebase}
+              onNotify={notify}
+            />
+          )}
+        </main>
       </div>
+
+      {/* Shared Modals */}
+      <CustomerProfileModal
+        customer={selectedCustomer}
+        onClose={() => setSelectedCustomer(null)}
+        onSelectOrder={(ord) => {
+          setSelectedCustomer(null);
+          setSelectedOrder(ord);
+        }}
+        onDeleteCustomerClick={setDeleteCustomerTarget}
+      />
+
+      <OrderDetailsModal
+        order={selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        onApprove={handleApproveOrder}
+        onRejectClick={setRejectingOrder}
+        onDeleteClick={setDeleteOrderTarget}
+      />
+
+      <RejectOrderModal
+        order={rejectingOrder}
+        isSubmitting={isSubmittingReject}
+        onClose={() => setRejectingOrder(null)}
+        onSubmit={handleRejectOrderSubmit}
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(deleteOrderTarget)}
+        title="Delete Order Record"
+        description={`Delete order ${deleteOrderTarget?.orderId} by ${deleteOrderTarget?.studentName}? Any active PDF purchases tied to this order will also be revoked.`}
+        confirmLabel="Delete Order"
+        isProcessing={isDeletingOrder}
+        onCancel={() => setDeleteOrderTarget(null)}
+        onConfirm={handleConfirmDeleteOrder}
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(deleteCustomerTarget)}
+        title="Delete Customer & Revoke All Access"
+        description={`Permanently delete ${deleteCustomerTarget?.fullName} (${
+          deleteCustomerTarget?.mobile || deleteCustomerTarget?.email || deleteCustomerTarget?.customerId
+        })? This will remove their customer record, ${
+          deleteCustomerTarget?.totalOrders || 0
+        } order(s), all active PDF access, and bound device(s) from both the server and Firebase.`}
+        confirmLabel="Delete Customer"
+        isProcessing={isDeletingCustomer}
+        onCancel={() => setDeleteCustomerTarget(null)}
+        onConfirm={handleConfirmDeleteCustomer}
+      />
     </div>
   );
 };

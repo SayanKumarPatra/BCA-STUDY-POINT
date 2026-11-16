@@ -10,6 +10,15 @@ import {
   type User,
 } from 'firebase/auth';
 import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import {
   getDatabase,
   ref as rtdbRef,
   set as rtdbSet,
@@ -18,12 +27,20 @@ import {
   update as rtdbUpdate,
 } from 'firebase/database';
 import { firebaseConfig } from './config';
-import type { Product, Student } from '../types';
+import type {
+  Product,
+  Student,
+  BannerSlide,
+  EffectivePackagePricing,
+  SiteSettings,
+  OfferConfig,
+} from '../types';
 import { FALLBACK_PRODUCTS } from '../constants/fallbackProducts';
 
 // Initialize Firebase App singleton with official config
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const firestore = getFirestore(app);
 export const rtdb = getDatabase(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -65,8 +82,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 /**
- * Synchronize all 11 official BCA products with 3D textbook covers
- * into Firebase Realtime Database (RTDB).
+ * Synchronize all official BCA products with 3D textbook covers
+ * into Firebase Realtime Database (RTDB). Only invoke explicitly from Admin Panel or if RTDB is empty.
  */
 export async function syncAllOfficialProductsToFirestore(): Promise<{ success: boolean; count: number; error?: string }> {
   const now = new Date().toISOString();
@@ -80,7 +97,6 @@ export async function syncAllOfficialProductsToFirestore(): Promise<{ success: b
       };
     }
     await rtdbSet(rtdbRef(rtdb, 'products'), productsObj);
-    console.log('Synced 11 official products to Firebase Realtime Database (RTDB) successfully');
     return { success: true, count: FALLBACK_PRODUCTS.length };
   } catch (err: any) {
     console.warn('RTDB sync notice:', err?.message || err);
@@ -89,9 +105,8 @@ export async function syncAllOfficialProductsToFirestore(): Promise<{ success: b
 }
 
 /**
- * Real-time Listener for Question Bank Products
- * Listens directly to Firebase Realtime Database (RTDB).
- * Guarantees that ALL 11 subjects are ALWAYS displayed without collisions or timeout errors.
+ * Real-time Listener for Question Bank Products (RTDB)
+ * Respects Admin-edited prices, descriptions, specialization, and images without overwriting them.
  */
 export function subscribeToProductsRealtime(
   onUpdate: (products: Product[]) => void,
@@ -99,16 +114,11 @@ export function subscribeToProductsRealtime(
 ): () => void {
   const productsRef = rtdbRef(rtdb, 'products');
 
-  // Trigger initial synchronization to ensure user's Firebase console has data
-  syncAllOfficialProductsToFirestore().catch((e) => console.warn('Auto-sync notice:', e));
-
-  // Listen directly to Firebase Realtime Database
   const unsubscribe = rtdbOnValue(
     productsRef,
     (snapshot) => {
       const data = snapshot.val();
       if (!data) {
-        syncAllOfficialProductsToFirestore().catch(() => {});
         onUpdate(FALLBACK_PRODUCTS);
         return;
       }
@@ -117,53 +127,48 @@ export function subscribeToProductsRealtime(
       const keys = Object.keys(data);
       for (const key of keys) {
         const item = data[key];
+        if (!item || typeof item !== 'object') continue;
         const fallback = FALLBACK_PRODUCTS.find((p) => p.id === key || p.id === item.id);
-        const resolvedCover = item.coverImageUrl || item.imageUrl || fallback?.coverImageUrl || '';
+        const resolvedCover = item.coverImageUrl ?? item.imageUrl ?? fallback?.coverImageUrl ?? '';
 
         products.push({
           id: item.id || key,
           semesterId: item.semesterId || 'sem-3',
           subjectCode: item.subjectCode || fallback?.subjectCode || '',
           subjectName: item.subjectName || fallback?.subjectName || '',
-          description: item.description || fallback?.description || '',
+          description: item.description ?? fallback?.description ?? '',
           syllabusHighlights: item.syllabusHighlights || fallback?.syllabusHighlights || [],
-          price: Number(item.price) || fallback?.price || 99,
-          originalPrice: item.originalPrice ? Number(item.originalPrice) : fallback?.originalPrice,
+          price: item.price !== undefined ? Number(item.price) : (fallback?.price ?? 20),
+          originalPrice:
+            item.originalPrice !== undefined
+              ? Number(item.originalPrice)
+              : fallback?.originalPrice,
           pageCount: Number(item.pageCount) || fallback?.pageCount || 30,
           privateStoragePath: item.privateStoragePath || fallback?.privateStoragePath || '',
           fileSizeKb: Number(item.fileSizeKb) || fallback?.fileSizeKb || 3000,
           published: item.published !== false,
-          examYear: item.examYear || '2024-2025 Edition',
+          examYear: item.examYear || fallback?.examYear || '2024-2025 Edition',
           coverImageUrl: resolvedCover,
           imageUrl: resolvedCover,
           paperType: item.paperType || fallback?.paperType || 'core',
+          specialization: item.specialization || fallback?.specialization,
           createdAt: item.createdAt || new Date().toISOString(),
           updatedAt: item.updatedAt || new Date().toISOString(),
         });
       }
 
-      // Merge any fallback product missing by strict ID so all 11 always show
-      const mergedProducts: Product[] = [...products];
-      for (const fallback of FALLBACK_PRODUCTS) {
-        const alreadyIncluded = mergedProducts.some((p) => p.id === fallback.id);
-        if (!alreadyIncluded) {
-          mergedProducts.push(fallback);
-        }
-      }
-
       // Sort consistently by Core first, then Specialization
-      mergedProducts.sort((a, b) => {
+      products.sort((a, b) => {
         if (a.paperType === 'core' && b.paperType !== 'core') return -1;
         if (a.paperType !== 'core' && b.paperType === 'core') return 1;
         return a.subjectCode.localeCompare(b.subjectCode);
       });
 
-      onUpdate(mergedProducts);
+      onUpdate(products);
     },
     (error) => {
       console.warn('Realtime Database products listener notice:', error);
       if (onError) onError(error);
-      onUpdate(FALLBACK_PRODUCTS);
     }
   );
 
@@ -171,8 +176,85 @@ export function subscribeToProductsRealtime(
 }
 
 /**
+ * Real-time Listener for Homepage Sliding Banners
+ */
+export function subscribeToBannersRealtime(
+  onUpdate: (banners: BannerSlide[]) => void
+): () => void {
+  const bannersRef = rtdbRef(rtdb, 'banners');
+  return rtdbOnValue(
+    bannersRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      if (!data || typeof data !== 'object') return;
+      const list: BannerSlide[] = Object.values(data).filter(
+        (b: any) => b && typeof b === 'object' && b.imageUrl
+      ) as BannerSlide[];
+      list.sort((a, b) => (a.order || 0) - (b.order || 0));
+      onUpdate(list);
+    },
+    (err) => console.warn('RTDB banners listener notice:', err)
+  );
+}
+
+/**
+ * Real-time Listener for Effective Package & Offer Pricing
+ */
+export function subscribeToEffectivePricingRealtime(
+  onUpdate: (pricing: EffectivePackagePricing) => void
+): () => void {
+  const pricingRef = rtdbRef(rtdb, 'packagePricing');
+  return rtdbOnValue(
+    pricingRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      if (data && typeof data === 'object' && data.core) {
+        onUpdate(data as EffectivePackagePricing);
+      }
+    },
+    (err) => console.warn('RTDB packagePricing listener notice:', err)
+  );
+}
+
+/**
+ * Real-time Listener for Offers
+ */
+export function subscribeToOffersRealtime(
+  onUpdate: (offers: OfferConfig[]) => void
+): () => void {
+  const offersRef = rtdbRef(rtdb, 'offers');
+  return rtdbOnValue(
+    offersRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      if (!data || typeof data !== 'object') return;
+      onUpdate(Object.values(data) as OfferConfig[]);
+    },
+    (err) => console.warn('RTDB offers listener notice:', err)
+  );
+}
+
+/**
+ * Real-time Listener for Website Settings (Announcements, Payment Info, Homepage Copy)
+ */
+export function subscribeToSiteSettingsRealtime(
+  onUpdate: (settings: SiteSettings) => void
+): () => void {
+  const settingsRef = rtdbRef(rtdb, 'siteSettings');
+  return rtdbOnValue(
+    settingsRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      if (data && typeof data === 'object') {
+        onUpdate(data as SiteSettings);
+      }
+    },
+    (err) => console.warn('RTDB siteSettings listener notice:', err)
+  );
+}
+
+/**
  * Real-time Update Product in Firebase Realtime Database
- * Updates price, original price, image, description, or published state
  */
 export async function updateProductRealtime(
   productId: string,
@@ -193,8 +275,48 @@ export async function updateProductRealtime(
 
 /**
  * Real-time Student Profile Sync
- * Saves student registration and details directly to Firebase Realtime Database
+ * Saves student registration and details securely to Firebase Firestore & Realtime Database
+ * Note: PASSWORDS ARE NEVER STORED IN FIRESTORE OR DATABASE.
  */
+export async function saveStudentProfileFirestore(student: {
+  id: string;
+  fullName: string;
+  email: string;
+  mobile: string;
+  collegeName?: string;
+  studentId?: string;
+}): Promise<void> {
+  const now = new Date().toISOString();
+  const safeProfile = {
+    id: student.id,
+    fullName: student.fullName,
+    email: student.email,
+    mobile: student.mobile,
+    collegeName: student.collegeName || '',
+    studentId: student.studentId || '',
+    updatedAt: now,
+  };
+
+  try {
+    await setDoc(doc(firestore, 'students', student.id), safeProfile, { merge: true });
+  } catch (err) {
+    console.warn('Firestore profile save note:', err);
+  }
+}
+
+export async function getStudentProfileFirestore(studentId: string): Promise<any | null> {
+  try {
+    const snap = await getDoc(doc(firestore, 'students', studentId));
+    if (snap.exists()) {
+      return snap.data();
+    }
+    return null;
+  } catch (err) {
+    console.warn('Firestore profile get note:', err);
+    return null;
+  }
+}
+
 export async function syncStudentProfileRealtime(student: {
   id: string;
   fullName: string;
@@ -215,6 +337,38 @@ export async function syncStudentProfileRealtime(student: {
   } catch (e) {
     console.warn('RTDB student sync error:', e);
   }
+
+  // Also sync to Firestore for cross-database redundancy
+  saveStudentProfileFirestore(student).catch(() => {});
+}
+
+/**
+ * Firebase Auth: Register with Email and Password
+ * Passwords are encrypted and handled exclusively by Firebase Authentication
+ */
+export async function registerWithEmailPassword(
+  email: string,
+  pass: string,
+  profile: { fullName: string; mobile: string; collegeName?: string }
+) {
+  const cred = await createUserWithEmailAndPassword(auth, email, pass);
+  if (cred.user) {
+    await syncStudentProfileRealtime({
+      id: cred.user.uid,
+      fullName: profile.fullName,
+      email: cred.user.email || email,
+      mobile: profile.mobile,
+      collegeName: profile.collegeName,
+    });
+  }
+  return cred;
+}
+
+/**
+ * Firebase Auth: Login with Email and Password
+ */
+export async function loginWithEmailPassword(email: string, pass: string) {
+  return await signInWithEmailAndPassword(auth, email, pass);
 }
 
 /**
@@ -376,7 +530,7 @@ export function subscribeToOrdersRealtime(
  */
 export async function updateOrderStatusRealtime(
   orderId: string,
-  paymentStatus: 'pending' | 'verified' | 'failed',
+  paymentStatus: 'pending' | 'verified' | 'failed' | 'rejected',
   additionalData?: any
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -400,6 +554,36 @@ export async function deleteOrderRealtime(orderId: string): Promise<void> {
     await rtdbSet(rtdbRef(rtdb, `orders/${orderId}`), null);
   } catch (e) {
     console.warn('RTDB deleteOrderRealtime notice:', e);
+  }
+}
+
+/**
+ * Delete customer profile, orders, and device session from Firebase RTDB & Firestore
+ */
+export async function deleteCustomerRealtime(
+  userIds: string[],
+  orderIds: string[]
+): Promise<void> {
+  try {
+    const ops: Promise<any>[] = [];
+    for (const oid of orderIds) {
+      if (oid) {
+        ops.push(rtdbSet(rtdbRef(rtdb, `orders/${oid}`), null).catch(() => {}));
+      }
+    }
+    for (const uid of userIds) {
+      if (uid && !uid.startsWith('cust-')) {
+        ops.push(rtdbSet(rtdbRef(rtdb, `students/${uid}`), null).catch(() => {}));
+        // Fire-and-forget Firestore cleanup (Firestore client SDK can wait 15-30s on permission retries if awaited)
+        deleteDoc(doc(firestore, 'students', uid)).catch(() => {});
+      }
+    }
+    await Promise.race([
+      Promise.allSettled(ops),
+      new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch (e) {
+    console.warn('RTDB deleteCustomerRealtime notice:', e);
   }
 }
 

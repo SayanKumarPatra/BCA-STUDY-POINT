@@ -1,9 +1,54 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { db } from '../db';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { db, PUBLIC_UPLOADS_DIR } from '../db';
 import type { Order, OrderItem } from '../../src/types';
 
 export const ordersRouter = Router();
+
+const screenshotStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    if (!fs.existsSync(PUBLIC_UPLOADS_DIR)) {
+      fs.mkdirSync(PUBLIC_UPLOADS_DIR, { recursive: true });
+    }
+    cb(null, PUBLIC_UPLOADS_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '') || '.png';
+    const safeName = `pay_${Date.now()}_${crypto.randomBytes(3).toString('hex')}${ext}`;
+    cb(null, safeName);
+  },
+});
+
+const uploadScreenshot = multer({
+  storage: screenshotStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image screenshots are allowed.'));
+    }
+  },
+});
+
+/**
+ * POST /api/checkout/upload-screenshot
+ * Optional payment screenshot upload stored cleanly in public uploads
+ */
+ordersRouter.post('/upload-screenshot', uploadScreenshot.single('screenshot'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Please select a screenshot image.' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ success: true, imageUrl });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message || 'Screenshot upload failed' });
+  }
+});
 
 /**
  * Generate unique order ID in format: ORD-YYYYMM-XXXXXX
@@ -49,9 +94,8 @@ ordersRouter.post('/create-order', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Please select at least one question bank.' });
     }
 
-    // Server-side calculation with Official Package Pricing integration
+    // Server-side calculation using live Package & Offer Pricing (enforces expiry automatically)
     const orderItems: OrderItem[] = [];
-    let calculatedTotal = 0;
 
     for (const prodId of selectedProductIds) {
       const product = db.getProduct(prodId);
@@ -67,26 +111,9 @@ ordersRouter.post('/create-order', async (req, res) => {
         subjectCode: product.subjectCode,
         price: product.price,
       });
-      calculatedTotal += product.price;
     }
 
-    // Official BCA STUDY POINT Package Pricing Rules:
-    // Core (4 subjects): ₹69 | Language Add-on (+1): +₹10 | Specialization Add-on (+1): +₹20
-    const coreIds = ['prod-bca-maj3', 'prod-bca-min3', 'prod-bca-mdc3', 'prod-bca-sec3'];
-    const hasCorePackage = coreIds.every((cid) => selectedProductIds.includes(cid));
-
-    if (hasCorePackage) {
-      const langIds = ['prod-bca-aec3-bengali', 'prod-bca-aec3-sanskrit'];
-      const specIds = ['prod-spec-ds', 'prod-spec-ai', 'prod-spec-cs', 'prod-spec-ml', 'prod-spec-iot'];
-      const hasLang = selectedProductIds.some((id: string) => langIds.includes(id));
-      const hasSpec = selectedProductIds.some((id: string) => specIds.includes(id));
-
-      let pkgTotal = 69; // 4 Core Launch Price
-      if (hasLang) pkgTotal += 10; // +1 Language Add-on
-      if (hasSpec) pkgTotal += 20; // +1 Specialization Add-on
-
-      calculatedTotal = pkgTotal;
-    }
+    const { totalAmount: calculatedTotal, packageName } = db.calculateOrderTotal(selectedProductIds);
 
     if (calculatedTotal <= 0) {
       return res.status(400).json({ success: false, error: 'Invalid order amount.' });
@@ -116,6 +143,7 @@ ordersRouter.post('/create-order', async (req, res) => {
       studentId: student.studentId,
       selectedProductIds,
       items: orderItems,
+      packageName,
       totalAmount: calculatedTotal,
       paymentGatewayOrderId: gatewayOrderId,
       paymentStatus: 'pending',
@@ -154,7 +182,7 @@ ordersRouter.post('/create-order', async (req, res) => {
 
 /**
  * POST /api/checkout/verify-payment
- * Submits payment UTR reference for Administrator verification
+ * Records student payment confirmation & optional screenshot for Admin verification
  */
 ordersRouter.post('/verify-payment', async (req, res) => {
   try {
@@ -162,9 +190,13 @@ ordersRouter.post('/verify-payment', async (req, res) => {
       orderId,
       utrNumber,
       razorpayPaymentId,
+      paymentScreenshotUrl,
     } = req.body;
 
-    const referenceId = utrNumber || razorpayPaymentId || `UTR-${Date.now()}`;
+    const referenceId =
+      utrNumber ||
+      razorpayPaymentId ||
+      (paymentScreenshotUrl ? 'Screenshot Uploaded' : 'WhatsApp Screenshot Verification');
 
     if (!orderId) {
       return res.status(400).json({ success: false, error: 'Missing Order ID' });
@@ -189,6 +221,7 @@ ordersRouter.post('/verify-payment', async (req, res) => {
     db.updateOrder(orderId, {
       paymentStatus: 'pending',
       paymentReference: referenceId,
+      ...(paymentScreenshotUrl ? { paymentScreenshotUrl: String(paymentScreenshotUrl) } : {}),
     });
 
     // Grant purchases with status 'pending_approval' (Admin verification gate)
@@ -200,7 +233,7 @@ ordersRouter.post('/verify-payment', async (req, res) => {
       action: 'PAYMENT_SUBMITTED_FOR_VERIFICATION',
       targetId: orderId,
       targetType: 'ORDER',
-      details: `Payment submitted ₹${order.totalAmount} by ${order.studentName} (${order.studentEmail}). Reference: ${referenceId}. Awaiting Admin verification before unlocking access.`,
+      details: `Payment submitted ₹${order.totalAmount} by ${order.studentName} (${order.studentEmail}). Method: ${referenceId}. Awaiting Admin verification before unlocking access.`,
     });
 
     res.json({

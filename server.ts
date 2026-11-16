@@ -9,7 +9,7 @@ import { adminRouter } from './server/routes/admin';
 import { authRouter } from './server/routes/auth';
 import { pdfService } from './server/pdfService';
 import { firebaseSync } from './server/firebaseSync';
-import { db } from './server/db';
+import { db, PUBLIC_UPLOADS_DIR } from './server/db';
 
 dotenv.config();
 
@@ -24,6 +24,9 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // Serve admin-uploaded public assets (banners, product thumbnails, QR codes)
+  app.use('/uploads', express.static(PUBLIC_UPLOADS_DIR));
+
   // Basic request logger
   app.use((req, res, next) => {
     if (req.path.startsWith('/api')) {
@@ -36,8 +39,15 @@ async function startServer() {
   try {
     await pdfService.initializeSeedPdfs();
     console.log('Seed question bank PDFs initialized successfully in private storage.');
-    // Realtime sync all 11 products to Firebase Realtime Database
-    firebaseSync.syncProducts(db.getProducts()).catch((e) => {
+    // Realtime sync products, banners, packages, offers, and settings to Firebase Realtime Database
+    Promise.all([
+      firebaseSync.syncProducts(db.getProducts()),
+      firebaseSync.syncBanners(db.getBanners()),
+      firebaseSync.syncPackages(db.getPackages()),
+      firebaseSync.syncOffers(db.getOffers()),
+      firebaseSync.syncSiteSettings(db.getSiteSettings()),
+      firebaseSync.syncEffectivePricing(db.getEffectivePackagePricing()),
+    ]).catch((e) => {
       console.warn('Firebase RTDB boot sync warning:', e?.message || e);
     });
   } catch (err) {

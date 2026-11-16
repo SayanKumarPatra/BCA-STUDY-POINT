@@ -1,10 +1,34 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, Phone, User, ArrowLeft, ShieldAlert, Smartphone, Clock, Globe, Copy, Check, ExternalLink } from 'lucide-react';
+import {
+  X,
+  Lock,
+  Mail,
+  Phone,
+  User,
+  ArrowLeft,
+  ShieldAlert,
+  Smartphone,
+  Clock,
+  Globe,
+  Copy,
+  Check,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Sparkles,
+  KeyRound,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BRAND } from '../constants/brand';
 
 import { api } from '../services/api';
-import { auth, googleProvider } from '../firebase/firebase';
+import {
+  auth,
+  googleProvider,
+  registerWithEmailPassword,
+  loginWithEmailPassword,
+  syncStudentProfileRealtime,
+} from '../firebase/firebase';
 import { signInWithPopup } from 'firebase/auth';
 
 interface AuthModalProps {
@@ -25,6 +49,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const { loginStudent, deviceInfo } = useAuth();
   const [isRegister, setIsRegister] = useState(defaultIsRegister);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [collegeName, setCollegeName] = useState('');
@@ -48,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const userEmail = res.user.email || `${res.user.uid}@student.bcastudypoint.com`;
         const userName = res.user.displayName || userEmail.split('@')[0] || 'BCA Student';
 
-        // Verify and bind on server with 1-device policy
+        // 1. Verify and bind on server with 1-device policy
         const loginRes = await api.googleLogin({
           email: userEmail,
           fullName: userName,
@@ -57,12 +83,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           deviceInfo,
         });
 
+        // 2. Realtime sync student profile in Firebase
+        await syncStudentProfileRealtime({
+          id: res.user.uid,
+          fullName: userName,
+          email: userEmail,
+          mobile: cleanMobile,
+        });
+
         loginStudent({
-          id: loginRes.student.id,
-          email: loginRes.student.email,
-          fullName: loginRes.student.fullName,
-          mobile: loginRes.student.mobile || cleanMobile,
-          collegeName: loginRes.student.collegeName,
+          id: loginRes.student?.id || res.user.uid,
+          email: loginRes.student?.email || userEmail,
+          fullName: loginRes.student?.fullName || userName,
+          mobile: loginRes.student?.mobile || cleanMobile,
+          collegeName: loginRes.student?.collegeName,
         });
 
         if (onSuccess) onSuccess();
@@ -70,7 +104,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       console.warn('Google sign in note:', err);
-      // If server rejected because another device is actively logged in
       if (err.errorCode === 'DEVICE_ALREADY_ACTIVE' || err.activeDevice) {
         await auth.signOut().catch(() => {});
         setBlockedActiveDevice(err.activeDevice || true);
@@ -82,7 +115,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else if (err.code === 'auth/popup-closed-by-user') {
         setError('Google Sign-In বাতিল হয়েছে। প্রয়োজনে নীচের ফর্মের সাহায্যে লগইন করুন।');
       } else {
-        setError(err.message || 'Google Sign-in সম্পন্ন করা যায়নি। আপনি নাম ও মোবাইল দিয়ে লগইন করতে পারেন।');
+        setError(err.message || 'Google Sign-in সম্পন্ন করা যায়নি। আপনি নাম ও পাসওয়ার্ড দিয়ে লগইন করতে পারেন।');
       }
     } finally {
       setIsLoading(false);
@@ -93,6 +126,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     setError('');
     setBlockedActiveDevice(null);
+    setUnauthorizedDomain(null);
 
     const cleanMobile = mobile.replace(/\D/g, '');
 
@@ -105,22 +139,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setError('দয়া করে একটি সঠিক ১০ সংখ্যার মোবাইল নম্বর লিখুন।');
         return;
       }
+      if (!email.trim() || !email.includes('@')) {
+        setError('দয়া করে সঠিক ইমেইল আইডি দিন।');
+        return;
+      }
+      if (!password || password.length < 6) {
+        setError('পাসওয়ার্ডটি অন্তত ৬ অক্ষরের হতে হবে।');
+        return;
+      }
 
       setIsLoading(true);
       try {
-        const cleanEmail = email.trim();
-        const effectiveEmail = cleanEmail || `${cleanMobile}@student.bcastudypoint.com`;
+        const cleanEmail = email.trim().toLowerCase();
 
+        // 1. Register with Firebase Auth (Passwords handled exclusively by Firebase, NEVER stored in plain DB)
+        let firebaseUid = '';
+        try {
+          const cred = await registerWithEmailPassword(cleanEmail, password, {
+            fullName: fullName.trim(),
+            mobile: cleanMobile,
+            collegeName: collegeName.trim() || undefined,
+          });
+          firebaseUid = cred.user.uid;
+        } catch (firebaseErr: any) {
+          if (firebaseErr.code === 'auth/email-already-in-use') {
+            setError('এই ইমেইল দিয়ে ইতিপূর্বেই অ্যাকাউন্ট তৈরি করা হয়েছে। দয়া করে "Sign In" করুন।');
+            setIsLoading(false);
+            return;
+          }
+          console.warn('Firebase Auth note:', firebaseErr.message);
+        }
+
+        // 2. Register with server database & bind current device
         const regRes = await api.studentRegister({
           fullName: fullName.trim(),
-          email: effectiveEmail,
+          email: cleanEmail,
           mobile: cleanMobile,
           collegeName: collegeName.trim() || undefined,
           deviceInfo,
         });
 
+        const activeId = firebaseUid || regRes.student.id;
+
         loginStudent({
-          id: regRes.student.id,
+          id: activeId,
           fullName: regRes.student.fullName,
           email: regRes.student.email,
           mobile: regRes.student.mobile,
@@ -130,12 +192,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (onSuccess) onSuccess();
         onClose();
       } catch (err: any) {
-        setError(err.message || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে। অন্য মোবাইল নম্বর দিয়ে চেষ্টা করুন।');
+        setError(err.message || 'রেজিস্ট্রেশন ব্যর্থ হয়েছে। অন্য মোবাইল নম্বর বা ইমেইল দিয়ে চেষ্টা করুন।');
       } finally {
         setIsLoading(false);
       }
     } else {
-      // SIGN IN MODE: Verify existing registered student & enforce single device
+      // SIGN IN MODE: Supports Firebase Email/Password AND registered Mobile login
       const identifier = email.trim();
       if (!identifier) {
         setError('দয়া করে আপনার রেজিস্টার্ড ইমেইল বা ১০ সংখ্যার মোবাইল নম্বর লিখুন।');
@@ -144,6 +206,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setIsLoading(true);
       try {
+        let authSuccess = false;
+
+        // If email and password provided, authenticate via Firebase Auth
+        if (identifier.includes('@') && password) {
+          try {
+            const cred = await loginWithEmailPassword(identifier.toLowerCase(), password);
+            if (cred.user) {
+              authSuccess = true;
+            }
+          } catch (fbLoginErr: any) {
+            console.warn('Firebase email login check:', fbLoginErr.code);
+            if (fbLoginErr.code === 'auth/wrong-password' || fbLoginErr.code === 'auth/invalid-credential') {
+              setError('ভুল পাসওয়ার্ড। অনুগ্রহ করে পুনরায় সঠিক পাসওয়ার্ড দিয়ে চেষ্টা করুন।');
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+
+        // Validate on backend with single active device verification
         const loginRes = await api.studentLogin(identifier, deviceInfo);
 
         loginStudent({
@@ -161,7 +243,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           setBlockedActiveDevice(err.activeDevice || true);
           setError(err.message || 'আপনার অ্যাকাউন্টটি ইতিমধ্যে অন্য একটি ডিভাইসে সক্রিয় রয়েছে।');
         } else {
-          setError(err.message || 'এই ইমেইল বা মোবাইল নম্বরে কোনো অ্যাকাউন্ট পাওয়া যায়নি। দয়া করে প্রথমে "Register" করুন।');
+          setError(err.message || 'এই তথ্যে কোনো অ্যাকাউন্ট পাওয়া যায়নি। সঠিক ইমেইল/পাসওয়ার্ড দিন অথবা Register করুন।');
         }
       } finally {
         setIsLoading(false);
@@ -173,59 +255,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div
       className={
         isPage
-          ? 'min-h-[85vh] flex flex-col items-center justify-center p-4 py-8'
-          : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto'
+          ? 'min-h-[85vh] flex flex-col items-center justify-center p-3 sm:p-4 py-6'
+          : 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto'
       }
     >
       {isPage && (
-        <div className="w-full max-w-sm mb-4">
+        <div className="w-full max-w-sm mb-3">
           <button
             onClick={onClose}
-            className="inline-flex items-center gap-1.5 text-xs text-[#FFE7A3] hover:text-white px-3.5 py-1.5 rounded-full bg-black/40 border border-[#FFE7A3]/30 transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs text-[#FFE7A3] hover:text-white px-3.5 py-1.5 rounded-full bg-black/50 border border-[#FFE7A3]/30 transition-all cursor-pointer shadow-sm"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Return to Public Website</span>
           </button>
         </div>
       )}
-      <div className="liquid-glass-master rounded-3xl max-w-sm w-full p-6 sm:p-7 border border-[#FFE7A3]/30 shadow-[0_25px_60px_rgba(0,0,0,0.85)] relative my-auto">
-        {/* Top Rim Specular Line */}
+
+      {/* 2026 Liquid Glass Modal Container */}
+      <div className="liquid-glass-master rounded-2xl sm:rounded-3xl max-w-sm w-full p-5 sm:p-6 border border-[#FFE7A3]/30 shadow-[0_20px_60px_rgba(0,0,0,0.85)] relative my-auto text-white">
+        {/* Specular Top Rim */}
         <div className="absolute inset-x-8 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#FFD34E]/60 to-transparent pointer-events-none" />
 
         {!isPage && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 text-white/60 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
+            className="absolute top-3.5 right-3.5 p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         )}
 
-        {/* Brand Logo & Title */}
-        <div className="text-center mb-6">
-          <div className="relative inline-block mb-3">
+        {/* Brand Header */}
+        <div className="text-center mb-4 sm:mb-5">
+          <div className="relative inline-block mb-2">
             <img
               src={BRAND.logoUrl}
               alt="Official Logo"
-              className="w-16 h-16 rounded-full object-cover mx-auto ring-2 ring-[#FFD34E] shadow-[0_0_20px_rgba(255,211,78,0.4)]"
+              className="w-13 h-13 sm:w-15 sm:h-15 rounded-full object-cover mx-auto ring-2 ring-[#FFD34E] shadow-[0_0_20px_rgba(255,211,78,0.4)]"
             />
-            <div className="absolute inset-0 rounded-full ring-1 ring-white/40 pointer-events-none" />
           </div>
 
-          <h2 className="text-xl font-extrabold text-white tracking-tight">
-            {isRegister ? 'Student Registration' : 'Student Sign In'}
+          <h2 className="text-lg sm:text-xl font-black text-white tracking-tight flex items-center justify-center gap-1.5">
+            <span>{isRegister ? 'Student Registration' : 'Student Sign In'}</span>
           </h2>
-          <p className="text-xs text-[#FFE7A3] mt-0.5">
-            Access your purchased BCA question banks
+          <p className="text-[11px] text-[#FFE7A3]/80 mt-0.5">
+            Secure cross-device access to your BCA Question Banks
           </p>
         </div>
 
-        {/* Tab switch */}
-        <div className="flex bg-black/40 p-1 rounded-xl text-xs font-bold mb-5 border border-white/10">
+        {/* Tab Switcher */}
+        <div className="flex bg-black/50 p-1 rounded-xl text-xs font-bold mb-4 border border-white/10">
           <button
             type="button"
-            onClick={() => setIsRegister(false)}
-            className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+            onClick={() => {
+              setIsRegister(false);
+              setError('');
+            }}
+            className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
               !isRegister
                 ? 'btn-gold-primary shadow-sm'
                 : 'text-white/70 hover:text-white'
@@ -235,8 +322,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setIsRegister(true)}
-            className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+            onClick={() => {
+              setIsRegister(true);
+              setError('');
+            }}
+            className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
               isRegister
                 ? 'btn-gold-primary shadow-sm'
                 : 'text-white/70 hover:text-white'
@@ -251,7 +341,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           type="button"
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className="w-full mb-3.5 py-2.5 px-3 bg-white text-gray-900 rounded-full font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-gray-100 transition-colors cursor-pointer"
+          className="w-full mb-3 py-2 px-3 bg-white text-gray-900 rounded-full font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-gray-100 transition-colors cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -276,10 +366,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Guided instructions if domain is unauthorized in Firebase */}
         {unauthorizedDomain && (
-          <div className="mb-4 p-3.5 bg-amber-950/90 border border-amber-500/70 rounded-2xl text-left text-xs text-amber-100 shadow-[0_10px_25px_rgba(0,0,0,0.6)] space-y-2.5">
+          <div className="mb-3.5 p-3 bg-amber-950/90 border border-amber-500/70 rounded-xl text-left text-xs text-amber-100 shadow-md space-y-2">
             <div className="flex items-center justify-between gap-1">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold">
-                <Globe className="w-4 h-4 text-amber-400 shrink-0" />
+                <Globe className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Google Sign-in ডোমেইন অনুমোদন</span>
               </div>
               <button
@@ -292,11 +382,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </div>
 
-            <p className="text-[11px] text-white/90 leading-relaxed">
-              Google Auth পলিসি অনুযায়ী আপনার লাইভ সাইটের ডোমেইনটি Firebase Console-এ যোগ করতে হবে:
-            </p>
-
-            <div className="bg-black/60 p-2 rounded-xl border border-white/10 flex items-center justify-between gap-2">
+            <div className="bg-black/60 p-2 rounded-lg border border-white/10 flex items-center justify-between gap-2">
               <div className="truncate">
                 <span className="text-[9px] text-white/50 block">যোগ করার ডোমেইন:</span>
                 <code className="text-xs text-[#FFD34E] font-mono font-bold">{unauthorizedDomain}</code>
@@ -308,81 +394,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   setCopiedDomain(true);
                   setTimeout(() => setCopiedDomain(false), 2500);
                 }}
-                className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                className="px-2 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 {copiedDomain ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                 <span>{copiedDomain ? 'কপি হয়েছে' : 'Copy'}</span>
               </button>
             </div>
 
-            <div className="text-[10px] text-white/80 space-y-1">
-              <p className="font-bold text-amber-300">১ মিনিটে কীভাবে ডোমেইন যোগ করবেন:</p>
-              <p>১. নীচের বাটনে ক্লিক করে Firebase Authentication Settings খুলুন।</p>
-              <p>২. <strong>Authorized domains</strong> সেকশনে গিয়ে <strong>Add domain</strong> চাপুন।</p>
-              <p>৩. কপি করা <code>{unauthorizedDomain}</code> পেস্ট করে <strong>Save</strong> করুন।</p>
-            </div>
-
-            <div className="pt-1 flex items-center gap-2">
-              <a
-                href="https://console.firebase.google.com/project/bcastudypoint-cdfdf/authentication/settings"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-[#FFD34E] text-black font-extrabold text-xs rounded-xl shadow-md hover:bg-[#FFE7A3] transition-colors"
-              >
-                <span>Firebase Console সেটিংস খুলুন</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-
-            <p className="text-[10px] text-[#FFE7A3]/90 text-center pt-1 border-t border-white/10">
-              💡 কোনো ডোমেইন সেটিংস ছাড়াও সরাসরি নীচের মোবাইল নম্বর দিয়ে অবিলম্বে লগইন/রেজিস্টার করতে পারবেন।
-            </p>
+            <a
+              href="https://console.firebase.google.com/project/bcastudypoint-cdfdf/authentication/settings"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-1 py-1.5 px-2 bg-[#FFD34E] text-black font-extrabold text-[11px] rounded-lg shadow hover:bg-[#FFE7A3]"
+            >
+              <span>Firebase Settings খুলুন (Authorized Domains)</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-3.5">
+        <div className="flex items-center gap-2 mb-3">
           <div className="flex-1 h-px bg-white/15" />
-          <span className="text-[10px] text-white/50 uppercase font-bold">
-            {isRegister ? 'Or with Name & Mobile' : 'Or with Email / Mobile'}
+          <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">
+            {isRegister ? 'Or with Email & Password' : 'Or with Email / Mobile'}
           </span>
           <div className="flex-1 h-px bg-white/15" />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {error && !unauthorizedDomain && (
-            <div className="p-3.5 bg-rose-950/90 border border-rose-500/60 rounded-xl text-xs text-rose-200 text-left space-y-2 shadow-lg">
+            <div className="p-3 bg-rose-950/90 border border-rose-500/60 rounded-xl text-xs text-rose-200 text-left space-y-1.5 shadow-md">
               {blockedActiveDevice ? (
                 <div>
-                  <div className="flex items-center gap-2 text-amber-300 font-bold mb-1.5">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold mb-1">
                     <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span className="text-sm">অন্য ডিভাইসে সক্রিয় রয়েছে!</span>
+                    <span>অন্য ডিভাইসে সক্রিয় রয়েছে!</span>
                   </div>
-                  <p className="text-xs text-white/95 leading-relaxed">
-                    আপনার এই অ্যাকাউন্টে ইতিমধ্যেই অন্য একটি ডিভাইসে লগইন রয়েছে। নিরাপত্তা নিশ্চিত করতে একসাথে কেবল <strong>১টি ডিভাইসে</strong> অ্যাক্সেস অনুমোদিত।
+                  <p className="text-[11px] text-white/90 leading-snug">
+                    একটি অ্যাকাউন্টে একসাথে কেবল ১টি সক্রিয় ডিভাইসে লগইন অনুমোদিত।
                   </p>
-
                   {typeof blockedActiveDevice === 'object' && blockedActiveDevice.os && (
-                    <div className="mt-2.5 p-2 bg-black/50 border border-white/10 rounded-lg text-[11px] text-white/80 space-y-1">
-                      <div className="flex items-center gap-1.5 text-amber-200 font-semibold">
-                        <Smartphone className="w-3.5 h-3.5 text-amber-300" />
-                        <span>বর্তমানে সক্রিয় ডিভাইস: {blockedActiveDevice.os} ({blockedActiveDevice.browser || 'Browser'})</span>
-                      </div>
-                      {blockedActiveDevice.lastSeenAt && (
-                        <div className="flex items-center gap-1.5 text-white/60 text-[10px]">
-                          <Clock className="w-3 h-3 text-white/40" />
-                          <span>সর্বশেষ সক্রিয়: {new Date(blockedActiveDevice.lastSeenAt).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}</span>
-                        </div>
-                      )}
+                    <div className="mt-1.5 p-1.5 bg-black/50 border border-white/10 rounded text-[10px] text-white/80">
+                      <span>বর্তমানে সক্রিয়: {blockedActiveDevice.os} ({blockedActiveDevice.browser || 'Browser'})</span>
                     </div>
                   )}
-
-                  <div className="mt-2.5 pt-2 border-t border-rose-500/30 text-[11px] text-[#FFE7A3]">
-                    <p className="font-semibold text-amber-300">কীভাবে এই ডিভাইসে লগইন করবেন?</p>
-                    <p className="text-white/80 mt-0.5">
-                      ১. আপনার আগের ফোন বা কম্পিউটার থেকে <strong>Logout</strong> বাটনে ক্লিক করুন।<br/>
-                      ২. এরপর এখানে আবার লগইন করলে সাথে সাথে খুলে যাবে।
-                    </p>
-                  </div>
+                  <p className="text-[10px] text-[#FFE7A3] mt-1.5">
+                    👉 আগের ডিভাইস থেকে Logout করুন, অথবা অ্যাডমিনের সহায়তা নিন।
+                  </p>
                 </div>
               ) : (
                 <>
@@ -393,15 +451,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       onClick={() => {
                         setIsRegister(true);
                         setError('');
-                        const clean = email.trim();
-                        if (/^\d{10}$/.test(clean)) {
-                          setMobile(clean);
-                          setEmail('');
-                        }
                       }}
-                      className="mt-2 text-xs font-bold text-[#FFD34E] hover:underline flex items-center gap-1 cursor-pointer"
+                      className="mt-1 text-xs font-bold text-[#FFD34E] hover:underline block cursor-pointer"
                     >
-                      <span>👉 এখানে ক্লিক করে ১ মিনিটে অ্যাকাউন্ট রেজিস্টার করুন</span>
+                      👉 নতুন একাউন্ট রেজিস্টার করতে এখানে ক্লিক করুন
                     </button>
                   )}
                 </>
@@ -411,30 +464,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {isRegister && (
             <div>
-              <label className="block text-xs font-bold text-white mb-1">
+              <label className="block text-[11px] font-bold text-white mb-1">
                 Full Name <span className="text-[#FFD34E]">*</span>
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-white/50 absolute left-3 top-2.5" />
+                <User className="w-3.5 h-3.5 text-white/50 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Rahul Sharma"
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-black/30 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
                 />
               </div>
             </div>
           )}
 
-          {isRegister ? (
+          {isRegister && (
             <div>
-              <label className="block text-xs font-bold text-white mb-1">
+              <label className="block text-[11px] font-bold text-white mb-1">
                 Mobile / WhatsApp Number <span className="text-[#FFD34E]">*</span>
               </label>
               <div className="relative">
-                <Phone className="w-4 h-4 text-white/50 absolute left-3 top-2.5" />
+                <Phone className="w-3.5 h-3.5 text-white/50 absolute left-3 top-2.5" />
                 <input
                   type="tel"
                   required
@@ -442,72 +495,85 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onChange={(e) => setMobile(e.target.value)}
                   placeholder="9876543210"
                   maxLength={10}
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-black/30 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="block text-xs font-bold text-white mb-1">
-                Registered Email or 10-Digit Mobile
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-white/50 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@gmail.com or 9876543210"
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-black/30 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
                 />
               </div>
             </div>
           )}
 
-          {isRegister && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-white mb-1">
-                  Email Address <span className="text-white/40 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-white/50 absolute left-3 top-2.5" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="student@gmail.com (Optional)"
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-black/30 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                  />
-                </div>
-              </div>
+          <div>
+            <label className="block text-[11px] font-bold text-white mb-1">
+              {isRegister ? 'Email Address' : 'Registered Email or Mobile'} <span className="text-[#FFD34E]">*</span>
+            </label>
+            <div className="relative">
+              <Mail className="w-3.5 h-3.5 text-white/50 absolute left-3 top-2.5" />
+              <input
+                type={isRegister ? 'email' : 'text'}
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={isRegister ? 'student@gmail.com' : 'student@gmail.com or 9876543210'}
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
+              />
+            </div>
+          </div>
 
-              <div>
-                <label className="block text-xs font-medium text-white/80 mb-1">
-                  College Name <span className="text-white/40">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={collegeName}
-                  onChange={(e) => setCollegeName(e.target.value)}
-                  placeholder="e.g. Guru Gobind Singh IPU"
-                  className="w-full px-3 py-2 text-xs bg-black/30 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
-                />
-              </div>
-            </>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold text-white">
+                Password {isRegister ? <span className="text-[#FFD34E]">*</span> : <span className="text-white/40 text-[10px] font-normal">(Optional for mobile)</span>}
+              </label>
+            </div>
+            <div className="relative">
+              <KeyRound className="w-3.5 h-3.5 text-white/50 absolute left-3 top-2.5" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required={isRegister}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isRegister ? 'Min 6 characters' : 'Enter password if set'}
+                className="w-full pl-8 pr-8 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2.5 top-2 text-white/50 hover:text-white cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {isRegister && (
+            <div>
+              <label className="block text-[10px] font-medium text-white/80 mb-1">
+                College Name <span className="text-white/40">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={collegeName}
+                onChange={(e) => setCollegeName(e.target.value)}
+                placeholder="e.g. Guru Gobind Singh IPU"
+                className="w-full px-3 py-1.5 text-xs bg-black/40 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-[#FFD34E]"
+              />
+            </div>
           )}
 
           <button
             type="submit"
-            className="btn-gold-primary w-full py-2.5 px-4 text-xs font-extrabold rounded-full cursor-pointer shadow-[0_6px_20px_rgba(255,211,78,0.35)] mt-3"
+            disabled={isLoading}
+            className="btn-gold-primary w-full py-2.5 px-4 text-xs font-black rounded-full cursor-pointer shadow-[0_6px_20px_rgba(255,211,78,0.35)] mt-2 flex items-center justify-center gap-1.5"
           >
-            {isRegister ? 'Create Account & Continue' : 'Sign In Now'}
+            {isLoading ? (
+              <span>Processing...</span>
+            ) : (
+              <span>{isRegister ? 'Create Secure Account' : 'Sign In Now'}</span>
+            )}
           </button>
         </form>
 
-        <p className="text-[10px] text-[#FFE7A3]/70 text-center mt-4">
-          One device binding policy automatically attaches to this active device.
+        <p className="text-[10px] text-[#FFE7A3]/70 text-center mt-3">
+          🔒 Secure Firebase Auth &amp; Real-time synchronization active.
         </p>
       </div>
     </div>

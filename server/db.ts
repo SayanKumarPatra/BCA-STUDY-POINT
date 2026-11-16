@@ -10,12 +10,20 @@ import type {
   DeviceBinding,
   ViewerSession,
   AdminAuditLog,
+  BannerSlide,
+  PackageDefinition,
+  OfferConfig,
+  SiteSettings,
+  EffectivePackagePricing,
+  CustomerSummary,
+  CustomerPurchasedSubject,
 } from '../src/types';
 import { firebaseSync } from './firebaseSync';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'bca_database.json');
 export const PDF_STORAGE_DIR = path.join(DATA_DIR, 'private_storage', 'pdfs');
+export const PUBLIC_UPLOADS_DIR = path.join(DATA_DIR, 'public_uploads');
 
 interface DatabaseSchema {
   semesters: Semester[];
@@ -26,6 +34,10 @@ interface DatabaseSchema {
   devices: DeviceBinding[];
   viewerSessions: ViewerSession[];
   adminAuditLogs: AdminAuditLog[];
+  banners: BannerSlide[];
+  packages: PackageDefinition[];
+  offers: OfferConfig[];
+  siteSettings: SiteSettings;
 }
 
 // Initial seed data for BCA Study Point - Focused strictly on BCA Semester 3
@@ -323,24 +335,171 @@ const SEED_PRODUCTS: Product[] = [
   },
 ];
 
+const SEED_BANNERS: BannerSlide[] = [
+  {
+    id: 'banner-welcome',
+    title: 'Welcome to BCA STUDY POINT - Your Complete Exam Preparation Partner',
+    heading: '',
+    subtitle: '',
+    description: '',
+    buttonText: '',
+    buttonLink: '#packages-pricing',
+    imageUrl: '/assets/aistudio/Welcome_to_BCA_Study_Point_005ca426.png',
+    alt: 'Welcome to BCA STUDY POINT - Smart Study Materials for BCA Students: Notes, Question Bank, PYQ, Video Explanation, Practice Sets',
+    order: 1,
+    active: true,
+    createdAt: '2026-11-10T00:00:00.000Z',
+    updatedAt: '2026-11-10T00:00:00.000Z',
+  },
+  {
+    id: 'banner-launch-offer',
+    title: 'Special Launch Offer - BCA 3rd Semester Complete Study Package at ₹99 Only',
+    heading: '',
+    subtitle: '',
+    description: '',
+    buttonText: '',
+    buttonLink: '#packages-pricing',
+    imageUrl: '/assets/aistudio/BCA_3rd_Semester_Launch_Offer_b41d8881.png',
+    alt: 'Special Launch Offer - BCA 3rd Semester Complete Study Package at ₹99 Only (Regular ₹199) - Limited Time Offer',
+    order: 2,
+    active: true,
+    createdAt: '2026-11-10T00:00:00.000Z',
+    updatedAt: '2026-11-10T00:00:00.000Z',
+  },
+  {
+    id: 'banner-benefits-policies',
+    title: 'Our Benefits & Policies - What You Get & How We Work',
+    heading: '',
+    subtitle: '',
+    description: '',
+    buttonText: '',
+    buttonLink: '#packages-pricing',
+    imageUrl: '/assets/aistudio/BCA_Study_Point_Benefits___Policies_6c4db866.png',
+    alt: 'Our Benefits & Policies - Key Benefits and Policy Guidelines for BCA Students',
+    order: 3,
+    active: true,
+    createdAt: '2026-11-10T00:00:00.000Z',
+    updatedAt: '2026-11-10T00:00:00.000Z',
+  },
+];
+
+const SEED_PACKAGES: PackageDefinition[] = [
+  {
+    id: 'pkg-bca-sem3-full',
+    name: 'BCA 3rd Semester Complete Study Package',
+    description: 'Includes 4 Compulsory Core Subjects + Optional Language Add-on + Optional Specialization Paper.',
+    compulsoryProductIds: [
+      'prod-bca-maj3',
+      'prod-bca-min3',
+      'prod-bca-mdc3',
+      'prod-bca-sec3',
+    ],
+    languageProductIds: [
+      'prod-bca-aec3-bengali',
+      'prod-bca-aec3-sanskrit',
+    ],
+    specializationProductIds: [
+      'prod-spec-ds',
+      'prod-spec-ai',
+      'prod-spec-cs',
+      'prod-spec-ml',
+      'prod-spec-iot',
+    ],
+    coreRegularPrice: 99,
+    coreOfferPrice: 69,
+    languageRegularPrice: 15,
+    languageOfferPrice: 10,
+    specializationRegularPrice: 35,
+    specializationOfferPrice: 20,
+    fullPackageRegularPrice: 149,
+    fullPackageOfferPrice: 99,
+    active: true,
+    updatedAt: '2026-11-10T00:00:00.000Z',
+  },
+];
+
+const SEED_OFFERS: OfferConfig[] = [
+  {
+    id: 'offer-launch-99',
+    title: 'Special Launch Offer',
+    badgeText: 'Up to 34% OFF',
+    bannerText: 'BCA 3rd Semester Complete Study Package at ₹99 Only',
+    description: '4 Compulsory Core + 1 Language + 1 Specialization complete exam question bank bundle.',
+    regularPrice: 149,
+    offerPrice: 99,
+    discountPercent: 34,
+    startDate: '2026-11-01T00:00:00.000Z',
+    expiryDate: '2027-03-31T23:59:59.000Z',
+    active: true,
+    isFullPackageOffer: true,
+    updatedAt: '2026-11-10T00:00:00.000Z',
+  },
+];
+
+const SEED_SITE_SETTINGS: SiteSettings = {
+  tagline: 'Your Exam Preparation Partner',
+  announcement: {
+    enabled: false,
+    text: '🔥 BCA 3rd Semester Complete Study Package Launch Offer: Get all 6 Subjects at ₹99 Only!',
+    link: '#packages-pricing',
+  },
+  homepage: {
+    sectionBadge: 'BCA 3rd Semester · Solved Question Banks',
+    sectionTitle: 'Package Selection & Pricing',
+    editionLabel: '2024-2025 Edition',
+    compulsoryNotice: 'Students must select all 4 compulsory subjects.',
+    optionalNotice: '2 additional optional sections are available. Students can choose them according to their preference.',
+    howItWorksTitle: 'How It Works',
+    featuredProductIds: [
+      'prod-bca-maj3',
+      'prod-bca-min3',
+      'prod-bca-mdc3',
+      'prod-bca-sec3',
+    ],
+  },
+  payment: {
+    upiId: 'BHARATPE2D0I0H4R5P81095@unitype',
+    qrCodeUrl: '/assets/aistudio/WhatsApp_Image_2026-11-10_at_7.58.34_PM_43197c9f.jpeg',
+    primaryPhone: '8145775413',
+    whatsappPhone: '8145775413',
+  },
+  updatedAt: '2026-11-10T00:00:00.000Z',
+};
+
 class Database {
   private data: DatabaseSchema;
+  private deletedOrderTombstones = new Map<string, number>();
+  private deletedStudentTombstones = new Map<string, number>();
 
   constructor() {
     this.ensureDirs();
     this.data = this.load();
 
-    // Ensure all 11 BCA question banks have the requested standard ₹20 price
+    // Only ensure undefined prices have a fallback; NEVER overwrite admin-edited prices!
+    let migrated = false;
     for (const prod of this.data.products) {
-      if (!prod.price || prod.price !== 20) {
+      if (prod.price === undefined || prod.price === null || Number.isNaN(Number(prod.price))) {
         prod.price = 20;
-        prod.originalPrice = 49;
+        prod.originalPrice = prod.originalPrice ?? 49;
+        migrated = true;
       }
     }
-    this.persist();
+    if (
+      this.data.siteSettings?.payment &&
+      (this.data.siteSettings.payment.whatsappPhone === '9382040746' ||
+        this.data.siteSettings.payment.primaryPhone === '9382040746')
+    ) {
+      this.data.siteSettings.payment.primaryPhone = '8145775413';
+      this.data.siteSettings.payment.whatsappPhone = '8145775413';
+      migrated = true;
+    }
+    if (migrated) {
+      this.persist();
+    }
 
     // Initial and periodic synchronization with Firebase Realtime Database
     this.syncWithFirebaseOrders().catch(() => {});
+    this.syncWithFirebaseStudents().catch(() => {});
     setInterval(() => {
       this.syncWithFirebaseOrders().catch(() => {});
     }, 4000);
@@ -351,9 +510,12 @@ class Database {
       const rtdbOrders = await firebaseSync.fetchOrders();
       if (!rtdbOrders) return;
       let changed = false;
+      const now = Date.now();
       for (const [key, val] of Object.entries<any>(rtdbOrders)) {
         if (!val || typeof val !== 'object') continue;
         const ordId = val.orderId || key;
+        const deletedAt = this.deletedOrderTombstones.get(ordId);
+        if (deletedAt && now - deletedAt < 120_000) continue;
         const existing = this.data.orders.find((o) => o.orderId === ordId);
         if (!existing) {
           const newOrder: Order = {
@@ -431,12 +593,56 @@ class Database {
     }
   }
 
+  async syncWithFirebaseStudents(): Promise<void> {
+    try {
+      const rtdbStudents = await firebaseSync.fetchStudents();
+      if (!rtdbStudents || typeof rtdbStudents !== 'object') return;
+      let changed = false;
+      const now = Date.now();
+      for (const [key, val] of Object.entries<any>(rtdbStudents)) {
+        if (!val || typeof val !== 'object') continue;
+        const uid = val.id || key;
+        const deletedAt = this.deletedStudentTombstones.get(uid);
+        if (deletedAt && now - deletedAt < 120_000) continue;
+        const email = (val.email || '').trim().toLowerCase();
+        const mobile = (val.mobile || '').replace(/\D/g, '');
+        const existing = this.data.students.find(
+          (s) =>
+            s.id === uid ||
+            (email && s.email.toLowerCase() === email) ||
+            (mobile.length >= 10 && s.mobile.replace(/\D/g, '') === mobile)
+        );
+        if (!existing && (email || mobile || val.fullName)) {
+          this.data.students.push({
+            id: val.id || key,
+            email: email || `${mobile || key}@student.bcastudypoint.com`,
+            fullName: val.fullName || 'BCA Student',
+            mobile: val.mobile || '',
+            collegeName: val.collegeName,
+            studentId: val.studentId,
+            registeredAt: val.registeredAt || val.createdAt || val.updatedAt || new Date().toISOString(),
+            lastLoginAt: val.lastLoginAt || val.lastActive || val.updatedAt || new Date().toISOString(),
+          });
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.persist();
+      }
+    } catch (e) {
+      console.warn('syncWithFirebaseStudents notice:', e);
+    }
+  }
+
   private ensureDirs() {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(PDF_STORAGE_DIR)) {
       fs.mkdirSync(PDF_STORAGE_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(PUBLIC_UPLOADS_DIR)) {
+      fs.mkdirSync(PUBLIC_UPLOADS_DIR, { recursive: true });
     }
   }
 
@@ -445,7 +651,7 @@ class Database {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        return {
+        const loaded: DatabaseSchema = {
           semesters: parsed.semesters || SEED_SEMESTERS,
           products: parsed.products || SEED_PRODUCTS,
           students: parsed.students || [],
@@ -454,7 +660,20 @@ class Database {
           devices: parsed.devices || [],
           viewerSessions: parsed.viewerSessions || [],
           adminAuditLogs: parsed.adminAuditLogs || [],
+          banners: Array.isArray(parsed.banners) && parsed.banners.length > 0 ? parsed.banners : SEED_BANNERS,
+          packages: Array.isArray(parsed.packages) && parsed.packages.length > 0 ? parsed.packages : SEED_PACKAGES,
+          offers: Array.isArray(parsed.offers) && parsed.offers.length > 0 ? parsed.offers : SEED_OFFERS,
+          siteSettings: parsed.siteSettings
+            ? {
+                ...SEED_SITE_SETTINGS,
+                ...parsed.siteSettings,
+                announcement: { ...SEED_SITE_SETTINGS.announcement, ...(parsed.siteSettings.announcement || {}) },
+                homepage: { ...SEED_SITE_SETTINGS.homepage, ...(parsed.siteSettings.homepage || {}) },
+                payment: { ...SEED_SITE_SETTINGS.payment, ...(parsed.siteSettings.payment || {}) },
+              }
+            : SEED_SITE_SETTINGS,
         };
+        return loaded;
       }
     } catch (e) {
       console.error('Failed to parse database file, re-initializing seeds', e);
@@ -477,6 +696,10 @@ class Database {
           timestamp: new Date().toISOString(),
         },
       ],
+      banners: SEED_BANNERS,
+      packages: SEED_PACKAGES,
+      offers: SEED_OFFERS,
+      siteSettings: SEED_SITE_SETTINGS,
     };
     this.saveData(initial);
     return initial;
@@ -553,6 +776,7 @@ class Database {
     };
     this.data.products.push(newProduct);
     this.persist();
+    firebaseSync.syncSingleProduct(newProduct).catch(() => {});
     return newProduct;
   }
 
@@ -565,6 +789,7 @@ class Database {
       updatedAt: new Date().toISOString(),
     };
     this.persist();
+    firebaseSync.syncSingleProduct(this.data.products[idx]).catch(() => {});
     return this.data.products[idx];
   }
 
@@ -573,6 +798,7 @@ class Database {
     this.data.products = this.data.products.filter((p) => p.id !== id);
     if (this.data.products.length !== initialLen) {
       this.persist();
+      firebaseSync.deleteProduct(id).catch(() => {});
       return true;
     }
     return false;
@@ -799,9 +1025,166 @@ class Database {
       details: `Deleted order ${orderId} (${order.studentName}, ₹${order.totalAmount}) and associated access records.`,
     });
 
+    this.deletedOrderTombstones.set(orderId, Date.now());
     this.persist();
     firebaseSync.deleteOrder(orderId).catch(() => {});
     return { success: true };
+  }
+
+  async deleteCustomer(
+    customerId: string,
+    options?: { email?: string; mobile?: string; orderIds?: string[] },
+    adminId: string = 'admin'
+  ): Promise<{
+    success: boolean;
+    deletedName?: string;
+    deletedOrderIds: string[];
+    deletedUserIds: string[];
+    error?: string;
+  }> {
+    const cleanEmail = (options?.email || '').trim().toLowerCase();
+    const cleanMobile = (options?.mobile || '').replace(/\D/g, '');
+    const seedOrderIds = Array.isArray(options?.orderIds) ? options!.orderIds : [];
+
+    const userIdsToDelete = new Set<string>();
+    const emailsToDelete = new Set<string>();
+    const mobilesToDelete = new Set<string>();
+    const orderIdsToDelete = new Set<string>(seedOrderIds);
+
+    if (customerId) {
+      if (customerId.startsWith('cust-')) {
+        orderIdsToDelete.add(customerId.slice(5));
+      } else {
+        userIdsToDelete.add(customerId);
+      }
+    }
+    if (cleanEmail) emailsToDelete.add(cleanEmail);
+    if (cleanMobile.length >= 10) mobilesToDelete.add(cleanMobile);
+
+    let deletedName = '';
+
+    // 1. Collect matching student IDs, emails, and mobiles
+    for (const s of this.data.students) {
+      const sEmail = (s.email || '').trim().toLowerCase();
+      const sMobile = (s.mobile || '').replace(/\D/g, '');
+      const matches =
+        s.id === customerId ||
+        (sEmail && emailsToDelete.has(sEmail)) ||
+        (sMobile.length >= 10 && mobilesToDelete.has(sMobile));
+
+      if (matches) {
+        userIdsToDelete.add(s.id);
+        if (sEmail) emailsToDelete.add(sEmail);
+        if (sMobile.length >= 10) mobilesToDelete.add(sMobile);
+        if (!deletedName && s.fullName) deletedName = s.fullName;
+      }
+    }
+
+    // 2. Collect matching order IDs and linked user IDs
+    for (const o of this.data.orders) {
+      const oEmail = (o.studentEmail || '').trim().toLowerCase();
+      const oMobile = (o.studentMobile || '').replace(/\D/g, '');
+      const matches =
+        orderIdsToDelete.has(o.orderId) ||
+        userIdsToDelete.has(o.userId) ||
+        `cust-${o.orderId}` === customerId ||
+        (oEmail && emailsToDelete.has(oEmail)) ||
+        (oMobile.length >= 10 && mobilesToDelete.has(oMobile));
+
+      if (matches) {
+        orderIdsToDelete.add(o.orderId);
+        if (o.userId) userIdsToDelete.add(o.userId);
+        if (oEmail) emailsToDelete.add(oEmail);
+        if (oMobile.length >= 10) mobilesToDelete.add(oMobile);
+        if (!deletedName && o.studentName) deletedName = o.studentName;
+      }
+    }
+
+    const beforeStudents = this.data.students.length;
+    const beforeOrders = this.data.orders.length;
+
+    // 3. Remove from all local collections
+    this.data.students = this.data.students.filter((s) => {
+      const sEmail = (s.email || '').trim().toLowerCase();
+      const sMobile = (s.mobile || '').replace(/\D/g, '');
+      return !(
+        userIdsToDelete.has(s.id) ||
+        (sEmail && emailsToDelete.has(sEmail)) ||
+        (sMobile.length >= 10 && mobilesToDelete.has(sMobile))
+      );
+    });
+
+    this.data.orders = this.data.orders.filter((o) => {
+      const oEmail = (o.studentEmail || '').trim().toLowerCase();
+      const oMobile = (o.studentMobile || '').replace(/\D/g, '');
+      return !(
+        orderIdsToDelete.has(o.orderId) ||
+        userIdsToDelete.has(o.userId) ||
+        (oEmail && emailsToDelete.has(oEmail)) ||
+        (oMobile.length >= 10 && mobilesToDelete.has(oMobile))
+      );
+    });
+
+    this.data.purchases = this.data.purchases.filter(
+      (p) => !userIdsToDelete.has(p.userId) && (!p.orderId || !orderIdsToDelete.has(p.orderId))
+    );
+
+    this.data.devices = this.data.devices.filter((d) => {
+      const dEmail = (d.userEmail || '').trim().toLowerCase();
+      return !userIdsToDelete.has(d.userId) && !(dEmail && emailsToDelete.has(dEmail));
+    });
+
+    this.data.viewerSessions = this.data.viewerSessions.filter(
+      (vs) => !userIdsToDelete.has(vs.userId)
+    );
+
+    const removedStudentsCount = beforeStudents - this.data.students.length;
+    const removedOrdersCount = beforeOrders - this.data.orders.length;
+
+    if (removedStudentsCount === 0 && removedOrdersCount === 0 && userIdsToDelete.size === 0) {
+      return {
+        success: false,
+        deletedOrderIds: [],
+        deletedUserIds: [],
+        error: 'Customer record not found.',
+      };
+    }
+
+    const displayLabel = deletedName || cleanEmail || cleanMobile || customerId;
+    this.logAdminAction({
+      adminId,
+      action: 'DELETE_CUSTOMER',
+      targetId: customerId,
+      targetType: 'STUDENT',
+      details: `Permanently deleted customer "${displayLabel}" (${removedOrdersCount} order(s) removed, all PDF access & device bindings revoked).`,
+    });
+
+    const now = Date.now();
+    for (const uid of userIdsToDelete) {
+      this.deletedStudentTombstones.set(uid, now);
+    }
+    for (const oid of orderIdsToDelete) {
+      this.deletedOrderTombstones.set(oid, now);
+    }
+
+    this.persist();
+
+    // 4. Clean up matching RTDB entries asynchronously in the background so Delete returns immediately
+    const rtdbPromises: Promise<any>[] = [];
+    for (const uid of userIdsToDelete) {
+      rtdbPromises.push(firebaseSync.deleteStudent(uid));
+    }
+    for (const oid of orderIdsToDelete) {
+      rtdbPromises.push(firebaseSync.deleteOrder(oid));
+    }
+    Promise.allSettled(rtdbPromises).catch(() => {});
+
+    return {
+      success: true,
+      deletedName: displayLabel,
+      deletedOrderIds: Array.from(orderIdsToDelete),
+      deletedUserIds: Array.from(userIdsToDelete),
+    };
   }
 
   // --- PURCHASES ---
@@ -1107,6 +1490,595 @@ class Database {
 
   getAuditLogs(): AdminAuditLog[] {
     return this.data.adminAuditLogs;
+  }
+
+  // --- BANNERS MANAGEMENT ---
+  getBanners(): BannerSlide[] {
+    return [...this.data.banners].sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  getActiveBanners(): BannerSlide[] {
+    return this.getBanners().filter((b) => b.active !== false);
+  }
+
+  saveBanner(bannerInput: Partial<BannerSlide> & { id?: string }): BannerSlide {
+    const now = new Date().toISOString();
+    if (bannerInput.id) {
+      const idx = this.data.banners.findIndex((b) => b.id === bannerInput.id);
+      if (idx !== -1) {
+        this.data.banners[idx] = {
+          ...this.data.banners[idx],
+          ...bannerInput,
+          updatedAt: now,
+        };
+        this.persist();
+        firebaseSync.syncBanners(this.data.banners).catch(() => {});
+        return this.data.banners[idx];
+      }
+    }
+
+    const maxOrder = this.data.banners.reduce((m, b) => Math.max(m, b.order || 0), 0);
+    const created: BannerSlide = {
+      id: bannerInput.id || `banner-${Date.now()}`,
+      title: bannerInput.title || bannerInput.heading || 'Promotional Banner',
+      heading: bannerInput.heading || '',
+      subtitle: bannerInput.subtitle || '',
+      description: bannerInput.description || '',
+      buttonText: bannerInput.buttonText || '',
+      buttonLink: bannerInput.buttonLink || '#packages-pricing',
+      imageUrl: bannerInput.imageUrl || '',
+      alt: bannerInput.alt || bannerInput.title || 'BCA Study Point Banner',
+      order: bannerInput.order ?? maxOrder + 1,
+      active: bannerInput.active !== false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.data.banners.push(created);
+    this.persist();
+    firebaseSync.syncBanners(this.data.banners).catch(() => {});
+    return created;
+  }
+
+  deleteBanner(id: string): boolean {
+    const initialLen = this.data.banners.length;
+    this.data.banners = this.data.banners.filter((b) => b.id !== id);
+    if (this.data.banners.length !== initialLen) {
+      this.persist();
+      firebaseSync.syncBanners(this.data.banners).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  reorderBanners(orderedIds: string[]): BannerSlide[] {
+    const idOrderMap = new Map<string, number>();
+    orderedIds.forEach((id, idx) => idOrderMap.set(id, idx + 1));
+    this.data.banners = this.data.banners.map((b) => ({
+      ...b,
+      order: idOrderMap.get(b.id) ?? b.order ?? 99,
+      updatedAt: new Date().toISOString(),
+    }));
+    this.persist();
+    firebaseSync.syncBanners(this.data.banners).catch(() => {});
+    return this.getBanners();
+  }
+
+  // --- PACKAGES MANAGEMENT ---
+  getPackages(): PackageDefinition[] {
+    return this.data.packages;
+  }
+
+  savePackage(pkgInput: Partial<PackageDefinition> & { id?: string }): PackageDefinition {
+    const now = new Date().toISOString();
+    if (pkgInput.id) {
+      const idx = this.data.packages.findIndex((p) => p.id === pkgInput.id);
+      if (idx !== -1) {
+        this.data.packages[idx] = {
+          ...this.data.packages[idx],
+          ...pkgInput,
+          updatedAt: now,
+        };
+        this.persist();
+        firebaseSync.syncPackages(this.data.packages).catch(() => {});
+        firebaseSync.syncEffectivePricing(this.getEffectivePackagePricing()).catch(() => {});
+        return this.data.packages[idx];
+      }
+    }
+
+    const created: PackageDefinition = {
+      id: pkgInput.id || `pkg-${Date.now()}`,
+      name: pkgInput.name || 'BCA Study Package',
+      description: pkgInput.description || '',
+      compulsoryProductIds: pkgInput.compulsoryProductIds || [],
+      languageProductIds: pkgInput.languageProductIds || [],
+      specializationProductIds: pkgInput.specializationProductIds || [],
+      coreRegularPrice: Number(pkgInput.coreRegularPrice ?? 99),
+      coreOfferPrice: Number(pkgInput.coreOfferPrice ?? 69),
+      languageRegularPrice: Number(pkgInput.languageRegularPrice ?? 15),
+      languageOfferPrice: Number(pkgInput.languageOfferPrice ?? 10),
+      specializationRegularPrice: Number(pkgInput.specializationRegularPrice ?? 35),
+      specializationOfferPrice: Number(pkgInput.specializationOfferPrice ?? 20),
+      fullPackageRegularPrice: Number(pkgInput.fullPackageRegularPrice ?? 149),
+      fullPackageOfferPrice: Number(pkgInput.fullPackageOfferPrice ?? 99),
+      active: pkgInput.active !== false,
+      updatedAt: now,
+    };
+    this.data.packages.push(created);
+    this.persist();
+    firebaseSync.syncPackages(this.data.packages).catch(() => {});
+    firebaseSync.syncEffectivePricing(this.getEffectivePackagePricing()).catch(() => {});
+    return created;
+  }
+
+  deletePackage(id: string): boolean {
+    const initialLen = this.data.packages.length;
+    this.data.packages = this.data.packages.filter((p) => p.id !== id);
+    if (this.data.packages.length !== initialLen) {
+      this.persist();
+      firebaseSync.syncPackages(this.data.packages).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  // --- OFFERS & PRICING MANAGEMENT (WITH SERVER-SIDE EXPIRY) ---
+  getOffers(): OfferConfig[] {
+    return this.data.offers;
+  }
+
+  isOfferCurrentlyValid(offer: OfferConfig): { isValid: boolean; isExpired: boolean } {
+    if (!offer.active) {
+      return { isValid: false, isExpired: false };
+    }
+    const now = Date.now();
+    const startMs = offer.startDate ? new Date(offer.startDate).getTime() : 0;
+    const expiryMs = offer.expiryDate ? new Date(offer.expiryDate).getTime() : Number.MAX_SAFE_INTEGER;
+    if (Number.isFinite(expiryMs) && now > expiryMs) {
+      return { isValid: false, isExpired: true };
+    }
+    if (Number.isFinite(startMs) && now < startMs) {
+      return { isValid: false, isExpired: false };
+    }
+    return { isValid: true, isExpired: false };
+  }
+
+  saveOffer(offerInput: Partial<OfferConfig> & { id?: string }): OfferConfig {
+    const now = new Date().toISOString();
+    const regularPrice = Number(offerInput.regularPrice ?? 149);
+    const offerPrice = Number(offerInput.offerPrice ?? 99);
+    const computedDiscount =
+      regularPrice > 0 ? Math.max(0, Math.round(((regularPrice - offerPrice) / regularPrice) * 100)) : 0;
+
+    if (offerInput.id) {
+      const idx = this.data.offers.findIndex((o) => o.id === offerInput.id);
+      if (idx !== -1) {
+        const updated: OfferConfig = {
+          ...this.data.offers[idx],
+          ...offerInput,
+          regularPrice,
+          offerPrice,
+          discountPercent: offerInput.discountPercent ?? computedDiscount,
+          updatedAt: now,
+        };
+        this.data.offers[idx] = updated;
+
+        // If this is the Full Package Offer, keep main package's fullPackage pricing synchronized
+        if (updated.isFullPackageOffer && this.data.packages.length > 0) {
+          this.data.packages[0].fullPackageOfferPrice = updated.offerPrice;
+          this.data.packages[0].fullPackageRegularPrice = updated.regularPrice;
+          this.data.packages[0].updatedAt = now;
+        }
+
+        this.persist();
+        firebaseSync.syncOffers(this.data.offers).catch(() => {});
+        firebaseSync.syncPackages(this.data.packages).catch(() => {});
+        firebaseSync.syncEffectivePricing(this.getEffectivePackagePricing()).catch(() => {});
+        return updated;
+      }
+    }
+
+    const created: OfferConfig = {
+      id: offerInput.id || `offer-${Date.now()}`,
+      title: offerInput.title || 'Promotional Offer',
+      badgeText: offerInput.badgeText || `${computedDiscount}% OFF`,
+      bannerText: offerInput.bannerText || '',
+      description: offerInput.description || '',
+      regularPrice,
+      offerPrice,
+      discountPercent: offerInput.discountPercent ?? computedDiscount,
+      startDate: offerInput.startDate || now,
+      expiryDate: offerInput.expiryDate || '2027-03-31T23:59:59.000Z',
+      active: offerInput.active !== false,
+      isFullPackageOffer: Boolean(offerInput.isFullPackageOffer),
+      updatedAt: now,
+    };
+    this.data.offers.push(created);
+    this.persist();
+    firebaseSync.syncOffers(this.data.offers).catch(() => {});
+    firebaseSync.syncEffectivePricing(this.getEffectivePackagePricing()).catch(() => {});
+    return created;
+  }
+
+  deleteOffer(id: string): boolean {
+    const initialLen = this.data.offers.length;
+    this.data.offers = this.data.offers.filter((o) => o.id !== id);
+    if (this.data.offers.length !== initialLen) {
+      this.persist();
+      firebaseSync.syncOffers(this.data.offers).catch(() => {});
+      firebaseSync.syncEffectivePricing(this.getEffectivePackagePricing()).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Authoritative server-side effective package & offer pricing.
+   * Automatically reverts launch/offer prices to regular prices if the offer is inactive or expired.
+   */
+  getEffectivePackagePricing(): EffectivePackagePricing {
+    const primaryPkg = this.data.packages.find((p) => p.active) || this.data.packages[0] || SEED_PACKAGES[0];
+    const fullOffer =
+      this.data.offers.find((o) => o.isFullPackageOffer) ||
+      this.data.offers[0] ||
+      SEED_OFFERS[0];
+
+    const offerValidity = fullOffer
+      ? this.isOfferCurrentlyValid(fullOffer)
+      : { isValid: false, isExpired: false };
+
+    const coreRegular = Number(primaryPkg.coreRegularPrice) || 99;
+    const coreOffer = offerValidity.isValid ? Number(primaryPkg.coreOfferPrice) || 69 : coreRegular;
+
+    const langRegular = Number(primaryPkg.languageRegularPrice) || 15;
+    const langOffer = offerValidity.isValid ? Number(primaryPkg.languageOfferPrice) || 10 : langRegular;
+
+    const specRegular = Number(primaryPkg.specializationRegularPrice) || 35;
+    const specOffer = offerValidity.isValid ? Number(primaryPkg.specializationOfferPrice) || 20 : specRegular;
+
+    const fullRegular =
+      Number(fullOffer?.regularPrice) ||
+      Number(primaryPkg.fullPackageRegularPrice) ||
+      coreRegular + langRegular + specRegular;
+    const fullOfferPrice = offerValidity.isValid
+      ? Number(fullOffer?.offerPrice) || Number(primaryPkg.fullPackageOfferPrice) || coreOffer + langOffer + specOffer
+      : fullRegular;
+
+    return {
+      packageName: primaryPkg.name,
+      packageDescription: primaryPkg.description,
+      packageActive: primaryPkg.active !== false,
+      compulsoryProductIds: primaryPkg.compulsoryProductIds,
+      languageProductIds: primaryPkg.languageProductIds,
+      specializationProductIds: primaryPkg.specializationProductIds,
+      offerActive: offerValidity.isValid,
+      offerExpired: offerValidity.isExpired,
+      offerTitle: fullOffer?.title || 'Special Launch Offer',
+      offerBadgeText: offerValidity.isValid
+        ? fullOffer?.badgeText || `Up to ${Math.max(0, Math.round(((fullRegular - fullOfferPrice) / (fullRegular || 1)) * 100))}% OFF`
+        : 'Regular Price',
+      offerExpiryDate: fullOffer?.expiryDate || '',
+      core: {
+        title: `Main Core Package (${primaryPkg.compulsoryProductIds.length} PDFs)`,
+        pdfCount: primaryPkg.compulsoryProductIds.length,
+        launchPrice: coreOffer,
+        regularPrice: coreRegular,
+      },
+      language: {
+        title: 'Language Add-on (1 PDF)',
+        pdfCount: 1,
+        launchPrice: langOffer,
+        regularPrice: langRegular,
+      },
+      specialization: {
+        title: 'Specialization Add-on (1 PDF)',
+        pdfCount: 1,
+        launchPrice: specOffer,
+        regularPrice: specRegular,
+      },
+      fullPackageOfferPrice: fullOfferPrice,
+      fullPackageRegularPrice: fullRegular,
+    };
+  }
+
+  /**
+   * Server-trusted order total calculator based on selected products, packages, and live offers.
+   */
+  calculateOrderTotal(selectedProductIds: string[]): {
+    totalAmount: number;
+    packageName: string;
+  } {
+    const pricing = this.getEffectivePackagePricing();
+    const selectedSet = new Set(selectedProductIds);
+
+    const hasCorePackage =
+      pricing.packageActive &&
+      pricing.compulsoryProductIds.length > 0 &&
+      pricing.compulsoryProductIds.every((cid) => selectedSet.has(cid));
+
+    if (hasCorePackage) {
+      const hasLang = pricing.languageProductIds.some((lid) => selectedSet.has(lid));
+      const hasSpec = pricing.specializationProductIds.some((sid) => selectedSet.has(sid));
+
+      // Check for any extra selected items outside standard core+1 lang+1 spec
+      const chosenLang = pricing.languageProductIds.find((lid) => selectedSet.has(lid));
+      const chosenSpec = pricing.specializationProductIds.find((sid) => selectedSet.has(sid));
+      const standardSet = new Set<string>(pricing.compulsoryProductIds);
+      if (chosenLang) standardSet.add(chosenLang);
+      if (chosenSpec) standardSet.add(chosenSpec);
+
+      let extraTotal = 0;
+      for (const pid of selectedProductIds) {
+        if (!standardSet.has(pid)) {
+          const prod = this.getProduct(pid);
+          if (prod) extraTotal += Number(prod.price) || 0;
+        }
+      }
+
+      if (hasLang && hasSpec) {
+        return {
+          totalAmount: pricing.fullPackageOfferPrice + extraTotal,
+          packageName: pricing.packageName || 'Complete Full Package',
+        };
+      }
+
+      let pkgTotal = pricing.core.launchPrice;
+      let label = 'Main Core Package';
+      if (hasLang) {
+        pkgTotal += pricing.language.launchPrice;
+        label = 'Main + Language Add-on';
+      }
+      if (hasSpec) {
+        pkgTotal += pricing.specialization.launchPrice;
+        label = 'Main + Specialization Add-on';
+      }
+
+      return {
+        totalAmount: pkgTotal + extraTotal,
+        packageName: label,
+      };
+    }
+
+    // Individual product selection sum
+    let sum = 0;
+    for (const pid of selectedProductIds) {
+      const prod = this.getProduct(pid);
+      if (prod) sum += Number(prod.price) || 0;
+    }
+    return {
+      totalAmount: sum,
+      packageName: selectedProductIds.length === 1 ? 'Single Subject PDF' : 'Custom Subject Selection',
+    };
+  }
+
+  // --- WEBSITE SETTINGS MANAGEMENT ---
+  getSiteSettings(): SiteSettings {
+    return this.data.siteSettings;
+  }
+
+  updateSiteSettings(updates: Partial<SiteSettings>): SiteSettings {
+    const current = this.data.siteSettings;
+    const next: SiteSettings = {
+      ...current,
+      ...updates,
+      announcement: {
+        ...current.announcement,
+        ...(updates.announcement || {}),
+      },
+      homepage: {
+        ...current.homepage,
+        ...(updates.homepage || {}),
+      },
+      payment: {
+        ...current.payment,
+        ...(updates.payment || {}),
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    this.data.siteSettings = next;
+    this.persist();
+    firebaseSync.syncSiteSettings(next).catch(() => {});
+    return next;
+  }
+
+  // --- CUSTOMER DIRECTORY AGGREGATION (REAL DATA ONLY) ---
+  getCustomersSummary(): CustomerSummary[] {
+    const productsMap = new Map<string, Product>();
+    this.data.products.forEach((p) => productsMap.set(p.id, p));
+
+    interface CustomerAccumulator {
+      customerId: string;
+      fullName: string;
+      mobile: string;
+      email: string;
+      collegeName?: string;
+      registeredAt: string | null;
+      lastLoginAt: string | null;
+      orders: Order[];
+      userIds: Set<string>;
+    }
+
+    const customersByKey = new Map<string, CustomerAccumulator>();
+
+    const resolveKey = (email?: string, mobile?: string, userId?: string): string => {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanMobile = (mobile || '').replace(/\D/g, '');
+      // Check existing bucket by email, mobile, or userId
+      for (const [k, acc] of customersByKey.entries()) {
+        if (cleanEmail && acc.email && acc.email === cleanEmail) return k;
+        if (cleanMobile.length >= 10 && acc.mobile && acc.mobile.replace(/\D/g, '') === cleanMobile) return k;
+        if (userId && acc.userIds.has(userId)) return k;
+      }
+      if (cleanEmail && !cleanEmail.endsWith('@student.bcastudypoint.com')) return `email:${cleanEmail}`;
+      if (cleanMobile.length >= 10) return `mob:${cleanMobile}`;
+      if (cleanEmail) return `email:${cleanEmail}`;
+      return `uid:${userId || 'unknown'}`;
+    };
+
+    // 1. Seed from registered students
+    for (const s of this.data.students) {
+      const key = resolveKey(s.email, s.mobile, s.id);
+      const existing = customersByKey.get(key);
+      if (!existing) {
+        customersByKey.set(key, {
+          customerId: s.id,
+          fullName: s.fullName || 'Student',
+          mobile: s.mobile || '',
+          email: (s.email || '').toLowerCase(),
+          collegeName: s.collegeName,
+          registeredAt: s.registeredAt || null,
+          lastLoginAt: s.lastLoginAt || null,
+          orders: [],
+          userIds: new Set([s.id]),
+        });
+      } else {
+        existing.userIds.add(s.id);
+        if (!existing.fullName && s.fullName) existing.fullName = s.fullName;
+        if (!existing.mobile && s.mobile) existing.mobile = s.mobile;
+        if (!existing.collegeName && s.collegeName) existing.collegeName = s.collegeName;
+        if (!existing.registeredAt && s.registeredAt) existing.registeredAt = s.registeredAt;
+      }
+    }
+
+    // 2. Merge all orders (ensuring direct checkout customers are included accurately)
+    for (const ord of this.getOrders()) {
+      const key = resolveKey(ord.studentEmail, ord.studentMobile, ord.userId);
+      let acc = customersByKey.get(key);
+      if (!acc) {
+        acc = {
+          customerId: ord.userId || `cust-${ord.orderId}`,
+          fullName: ord.studentName || 'Student',
+          mobile: ord.studentMobile || '',
+          email: (ord.studentEmail || '').toLowerCase(),
+          collegeName: ord.collegeName,
+          registeredAt: null,
+          lastLoginAt: null,
+          orders: [],
+          userIds: new Set(ord.userId ? [ord.userId] : []),
+        };
+        customersByKey.set(key, acc);
+      }
+      if (ord.userId) acc.userIds.add(ord.userId);
+      if (ord.studentName && (!acc.fullName || acc.fullName === 'Student')) acc.fullName = ord.studentName;
+      if (ord.studentMobile && !acc.mobile) acc.mobile = ord.studentMobile;
+      if (ord.collegeName && !acc.collegeName) acc.collegeName = ord.collegeName;
+      acc.orders.push(ord);
+    }
+
+    // 3. Build rich CustomerSummary records
+    const summaries: CustomerSummary[] = [];
+    const pricing = this.getEffectivePackagePricing();
+
+    for (const acc of customersByKey.values()) {
+      const sortedOrders = [...acc.orders].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const verifiedOrders = sortedOrders.filter((o) => o.paymentStatus === 'verified');
+      const pendingOrders = sortedOrders.filter((o) => o.paymentStatus === 'pending');
+      const totalAmountSpent = verifiedOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+      // Collect unique purchased subjects from verified orders + active purchases
+      const subjectMap = new Map<string, CustomerPurchasedSubject>();
+      const packageSet = new Set<string>();
+
+      for (const ord of verifiedOrders) {
+        if (ord.packageName) {
+          packageSet.add(ord.packageName);
+        } else {
+          // Derive package label honestly from order items if packageName wasn't recorded on legacy order
+          const prodIds = ord.selectedProductIds || ord.items.map((i) => i.productId);
+          const hasCore = pricing.compulsoryProductIds.every((id) => prodIds.includes(id));
+          const hasLang = pricing.languageProductIds.some((id) => prodIds.includes(id));
+          const hasSpec = pricing.specializationProductIds.some((id) => prodIds.includes(id));
+          if (hasCore && hasLang && hasSpec) {
+            packageSet.add('Complete Full Package');
+          } else if (hasCore && hasLang) {
+            packageSet.add('Main Core + Language');
+          } else if (hasCore && hasSpec) {
+            packageSet.add('Main Core + Specialization');
+          } else if (hasCore) {
+            packageSet.add('Main Core Package');
+          } else if (prodIds.length > 0) {
+            packageSet.add('Individual Subject(s)');
+          }
+        }
+
+        if (Array.isArray(ord.items) && ord.items.length > 0) {
+          for (const item of ord.items) {
+            const prod = productsMap.get(item.productId);
+            subjectMap.set(item.productId, {
+              productId: item.productId,
+              subjectCode: item.subjectCode || prod?.subjectCode || item.productId,
+              subjectName: item.subjectName || prod?.subjectName || item.productId,
+              price: Number(item.price) || prod?.price || 0,
+              accessStatus: 'active',
+            });
+          }
+        } else {
+          for (const pid of ord.selectedProductIds || []) {
+            const prod = productsMap.get(pid);
+            subjectMap.set(pid, {
+              productId: pid,
+              subjectCode: prod?.subjectCode || pid,
+              subjectName: prod?.subjectName || pid,
+              price: prod?.price || 0,
+              accessStatus: 'active',
+            });
+          }
+        }
+      }
+
+      // Also check Purchases table for active access tied to any userId of this customer
+      for (const pur of this.data.purchases) {
+        if (acc.userIds.has(pur.userId) && pur.accessStatus === 'active' && !subjectMap.has(pur.productId)) {
+          const prod = productsMap.get(pur.productId);
+          subjectMap.set(pur.productId, {
+            productId: pur.productId,
+            subjectCode: prod?.subjectCode || pur.productId,
+            subjectName: prod?.subjectName || pur.productId,
+            price: prod?.price || 0,
+            accessStatus: pur.accessStatus,
+          });
+        }
+      }
+
+      const purchasedProducts = Array.from(subjectMap.values());
+      const deviceInfo =
+        this.data.devices.find(
+          (d) =>
+            acc.userIds.has(d.userId) ||
+            (acc.email && d.userEmail.toLowerCase() === acc.email.toLowerCase())
+        ) || null;
+
+      summaries.push({
+        customerId: acc.customerId,
+        fullName: acc.fullName,
+        mobile: acc.mobile,
+        email: acc.email,
+        collegeName: acc.collegeName,
+        registeredAt: acc.registeredAt,
+        lastLoginAt: acc.lastLoginAt,
+        purchasedSubjectCount: purchasedProducts.length,
+        purchasedProductNames: purchasedProducts.map((p) => p.subjectName),
+        purchasedProducts,
+        purchasedPackageNames: Array.from(packageSet),
+        totalAmountSpent,
+        totalOrders: sortedOrders.length,
+        verifiedOrdersCount: verifiedOrders.length,
+        pendingOrdersCount: pendingOrders.length,
+        lastPurchaseDate: verifiedOrders[0]?.createdAt || sortedOrders[0]?.createdAt || null,
+        orderHistory: sortedOrders,
+        deviceInfo,
+      });
+    }
+
+    // Sort by most recent purchase or registration
+    summaries.sort((a, b) => {
+      const timeA = new Date(a.lastPurchaseDate || a.registeredAt || 0).getTime();
+      const timeB = new Date(b.lastPurchaseDate || b.registeredAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return summaries;
   }
 }
 

@@ -59,27 +59,29 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
   });
 
   const receiptNumber = `RCPT-${order.orderId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  const cleanUtr = (order.paymentReference || '').replace('upi_', '');
-
+  const cleanRef = (order.paymentReference || '').replace(/^upi_/i, '');
   const isVerified = order.paymentStatus === 'verified';
+
+  const itemsMrpSum = items.reduce((sum, it) => sum + (Number(it.price) || 0), 0);
+  const totalPaid = Number(order.totalAmount) || 0;
+  const hasBundleSavings = itemsMrpSum > totalPaid && items.length > 1;
+  const bundleDiscount = hasBundleSavings ? itemsMrpSum - totalPaid : 0;
+
+  const shareText = `*BCA STUDY POINT - Official Payment Receipt*\n\n` +
+    `Receipt No: ${receiptNumber}\n` +
+    `Order ID: ${order.orderId}\n` +
+    `Student: ${order.studentName}\n` +
+    `Mobile: ${order.studentMobile}\n` +
+    `Subjects Included: ${items.length}\n` +
+    `Amount Paid: ₹${totalPaid}\n` +
+    `Status: ${isVerified ? 'VERIFIED & ACTIVE' : 'PENDING VERIFICATION'}\n` +
+    `Ref: ${cleanRef || 'Screenshot Verified'}\n` +
+    `Date: ${formattedDate}\n\n` +
+    `Thank you for choosing BCA STUDY POINT!`;
+  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleShareWhatsApp = () => {
-    const text = `*BCA STUDY POINT - Official Payment Receipt*\n\n` +
-      `Receipt No: ${receiptNumber}\n` +
-      `Order ID: ${order.orderId}\n` +
-      `Student: ${order.studentName}\n` +
-      `Mobile: ${order.studentMobile}\n` +
-      `Amount Paid: ₹${order.totalAmount}\n` +
-      `Status: ${isVerified ? 'VERIFIED & ACTIVE' : 'PENDING VERIFICATION'}\n` +
-      `UTR / Ref: ${cleanUtr || 'N/A'}\n` +
-      `Date: ${formattedDate}\n\n` +
-      `Thank you for choosing BCA STUDY POINT!`;
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   return (
@@ -99,6 +101,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
 
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
+              type="button"
               onClick={handlePrint}
               className="btn-gold-primary px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
               title="Print Receipt / Save as PDF"
@@ -108,16 +111,19 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
               <span className="sm:hidden">Print</span>
             </button>
 
-            <button
-              onClick={handleShareWhatsApp}
+            <a
+              href={whatsappShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
               title="Share on WhatsApp"
             >
               <Share2 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Share</span>
-            </button>
+            </a>
 
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 text-white/70 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
               title="Close"
@@ -156,7 +162,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
 
             <div className="text-left sm:text-right font-mono text-xs text-slate-600 space-y-0.5">
               <div className="font-extrabold text-[#970014] text-sm uppercase tracking-wide">
-                Fee &amp; Payment Receipt
+                Consolidated Payment Receipt
               </div>
               <div><strong className="text-slate-800">Receipt No:</strong> {receiptNumber}</div>
               <div><strong className="text-slate-800">Order Ref:</strong> {order.orderId}</div>
@@ -177,7 +183,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
               </div>
               <div className="flex items-center gap-2 text-slate-700">
                 <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span>📱 {order.studentMobile || 'N/A'}</span>
+                <span>{order.studentMobile || 'N/A'}</span>
               </div>
               {order.studentEmail && (
                 <div className="flex items-center gap-2 text-slate-700">
@@ -202,16 +208,22 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
                 <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span className="font-semibold">Method: BharatPe UPI Direct</span>
               </div>
-              {cleanUtr && (
+              {order.packageName && (
+                <div className="text-slate-700">
+                  <span>Plan: </span>
+                  <span className="font-bold text-[#970014]">{order.packageName}</span>
+                </div>
+              )}
+              {cleanRef && (
                 <div className="font-mono text-slate-700">
-                  <span>UTR / Bank Ref: </span>
+                  <span>Verification: </span>
                   <span className="font-bold bg-slate-200/80 px-1.5 py-0.5 rounded text-[11px] text-slate-900">
-                    {cleanUtr}
+                    {cleanRef}
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <span className="text-slate-600">Verification Status:</span>
+                <span className="text-slate-600">Status:</span>
                 {isVerified ? (
                   <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full text-[10px]">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -238,7 +250,9 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
                   <th className="py-2.5 px-3 font-bold w-10 text-center">#</th>
                   <th className="py-2.5 px-3 font-bold w-24">Subject Code</th>
                   <th className="py-2.5 px-3 font-bold">Paper / Question Bank Name</th>
-                  <th className="py-2.5 px-3 font-bold text-right w-24">Amount</th>
+                  <th className="py-2.5 px-3 font-bold text-right w-28">
+                    {hasBundleSavings ? 'Subject Price' : 'Amount'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -249,20 +263,45 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
                     <td className="py-2.5 px-3 font-medium text-slate-800">
                       <div>{item.subjectName}</div>
                       <div className="text-[10px] text-slate-500">
-                        BCA 3rd Semester · Solved University Exam Guide
+                        BCA Solved University Exam Guide
                       </div>
                     </td>
                     <td className="py-2.5 px-3 font-mono font-bold text-right text-slate-900">
-                      ₹{item.price}
+                      {hasBundleSavings ? (
+                        <span className="text-emerald-700 font-semibold text-[11px]">Included</span>
+                      ) : (
+                        `₹${item.price}`
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-semibold text-slate-700">
-                <tr>
-                  <td colSpan={3} className="py-2 px-3 text-right">Subtotal:</td>
-                  <td className="py-2 px-3 text-right font-mono font-bold">₹{order.totalAmount}</td>
-                </tr>
+                {hasBundleSavings ? (
+                  <>
+                    <tr>
+                      <td colSpan={3} className="py-1.5 px-3 text-right text-[11px] text-slate-500">
+                        Individual Subjects Value ({items.length} subjects):
+                      </td>
+                      <td className="py-1.5 px-3 text-right font-mono text-[11px] line-through text-slate-400">
+                        ₹{itemsMrpSum}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="py-1.5 px-3 text-right text-[11px] text-emerald-700">
+                        Package / Offer Discount:
+                      </td>
+                      <td className="py-1.5 px-3 text-right font-mono text-[11px] text-emerald-700 font-bold">
+                        -₹{bundleDiscount}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="py-2 px-3 text-right">Subtotal:</td>
+                    <td className="py-2 px-3 text-right font-mono font-bold">₹{totalPaid}</td>
+                  </tr>
+                )}
                 <tr>
                   <td colSpan={3} className="py-1 px-3 text-right text-[11px] text-slate-500">
                     Digital Portal Access &amp; Device Binding Fee:
@@ -276,7 +315,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
                     Total Paid Amount:
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono text-base text-[#970014]">
-                    ₹{order.totalAmount}
+                    ₹{totalPaid}
                   </td>
                 </tr>
               </tfoot>
@@ -305,7 +344,7 @@ export const PaymentReceiptModal: React.FC<PaymentReceiptModalProps> = ({
             {/* Helpline contact */}
             <div className="text-left sm:text-right text-[11px] text-slate-600 space-y-0.5 font-mono">
               <div className="font-bold text-slate-800">Support Helpline</div>
-              <div>WhatsApp: +91 {BRAND.payment?.whatsappPhone || '9382040746'}</div>
+              <div>WhatsApp: +91 {BRAND.payment?.whatsappPhone || '8145775413'}</div>
               <div>Phone: +91 {BRAND.payment?.primaryPhone || '8145775413'}</div>
               <div>Email: support@bcastudypoint.com</div>
             </div>

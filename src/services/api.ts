@@ -1,4 +1,17 @@
-import type { Semester, Product, Order, Purchase, DeviceBinding, AdminAuditLog } from '../types';
+import type {
+  Semester,
+  Product,
+  Order,
+  DeviceBinding,
+  AdminAuditLog,
+  BannerSlide,
+  PackageDefinition,
+  OfferConfig,
+  SiteSettings,
+  EffectivePackagePricing,
+  CustomerSummary,
+  AdminDashboardStats,
+} from '../types';
 import { FALLBACK_PRODUCTS } from '../constants/fallbackProducts';
 
 const ADMIN_STORAGE_KEY = 'bca_admin_auth_key';
@@ -107,6 +120,15 @@ export const api = {
     );
   },
 
+  async getStorefrontConfig(): Promise<{
+    banners: BannerSlide[];
+    packagePricing: EffectivePackagePricing;
+    offers: OfferConfig[];
+    siteSettings: SiteSettings;
+  }> {
+    return safeFetchJson('/api/storefront-config');
+  },
+
   // --- Checkout & Payments ---
   async createCheckoutOrder(payload: {
     fullName: string;
@@ -139,9 +161,19 @@ export const api = {
     });
   },
 
+  async uploadCheckoutScreenshot(file: File): Promise<{ success: boolean; imageUrl: string }> {
+    const formData = new FormData();
+    formData.append('screenshot', file);
+    return safeFetchJson('/api/checkout/upload-screenshot', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
   async verifyPayment(payload: {
     orderId: string;
     utrNumber?: string;
+    paymentScreenshotUrl?: string;
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     razorpaySignature?: string;
@@ -307,39 +339,260 @@ export const api = {
     }
   },
 
-  async getAdminStats(): Promise<{
-    stats: {
-      totalOrders: number;
-      verifiedOrders: number;
-      totalRevenue: number;
-      totalStudents: number;
-      totalSubjects: number;
-      publishedSubjects: number;
-      activeDevices: number;
-    };
+  async getAdminStats(params?: {
+    range?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    stats: AdminDashboardStats;
     recentOrders: Order[];
+    recentCustomers: CustomerSummary[];
     recentLogs: AdminAuditLog[];
   }> {
     const adminKey = getStoredAdminKey();
+    const qs = new URLSearchParams();
+    if (params?.range) qs.set('range', params.range);
+    if (params?.startDate) qs.set('startDate', params.startDate);
+    if (params?.endDate) qs.set('endDate', params.endDate);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+
     return safeFetchJson(
-      '/api/admin/stats',
+      `/api/admin/stats${query}`,
       {
         headers: { 'x-admin-key': adminKey || '' },
       },
       {
         stats: {
+          todaySales: 0,
+          todayRevenue: 0,
+          filteredSales: 0,
+          filteredRevenue: 0,
           totalOrders: 0,
           verifiedOrders: 0,
+          pendingOrders: 0,
+          rejectedOrders: 0,
           totalRevenue: 0,
+          totalCustomers: 0,
           totalStudents: 0,
           totalSubjects: 11,
           publishedSubjects: 11,
+          activeOffersCount: 1,
           activeDevices: 0,
+          salesSeries: [],
         },
         recentOrders: [],
+        recentCustomers: [],
         recentLogs: [],
       }
     );
+  },
+
+  async uploadAdminImage(file: File): Promise<{ success: boolean; imageUrl: string }> {
+    const adminKey = getStoredAdminKey();
+    const formData = new FormData();
+    formData.append('image', file);
+    return safeFetchJson('/api/admin/upload-image', {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey || '' },
+      body: formData,
+    });
+  },
+
+  async getAdminCustomers(): Promise<{ customers: CustomerSummary[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(
+      '/api/admin/customers',
+      { headers: { 'x-admin-key': adminKey || '' } },
+      { customers: [] }
+    );
+  },
+
+  async deleteCustomer(customer: {
+    customerId: string;
+    email?: string;
+    mobile?: string;
+    orderIds?: string[];
+  }): Promise<{
+    success: boolean;
+    message: string;
+    deletedOrderIds: string[];
+    deletedUserIds: string[];
+  }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(
+      `/api/admin/customers/${encodeURIComponent(customer.customerId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': adminKey || '',
+        },
+        body: JSON.stringify({
+          email: customer.email,
+          mobile: customer.mobile,
+          orderIds: customer.orderIds,
+        }),
+      }
+    );
+  },
+
+  async getAdminReports(params?: {
+    range?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    summary: {
+      totalOrders: number;
+      verifiedOrders: number;
+      pendingOrders: number;
+      rejectedOrders: number;
+      totalRevenue: number;
+      averageOrderValue: number;
+    };
+    topSubjects: Array<{ productId: string; subjectCode: string; subjectName: string; count: number }>;
+    packageBreakdown: Array<{ packageName: string; count: number; revenue: number }>;
+  }> {
+    const adminKey = getStoredAdminKey();
+    const qs = new URLSearchParams();
+    if (params?.range) qs.set('range', params.range);
+    if (params?.startDate) qs.set('startDate', params.startDate);
+    if (params?.endDate) qs.set('endDate', params.endDate);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return safeFetchJson(`/api/admin/reports${query}`, {
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  // --- Banners Management ---
+  async getAdminBanners(): Promise<{ banners: BannerSlide[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/banners', {
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  async createBanner(banner: Partial<BannerSlide>): Promise<{ banner: BannerSlide; banners: BannerSlide[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/banners', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify(banner),
+    });
+  },
+
+  async updateBanner(id: string, banner: Partial<BannerSlide>): Promise<{ banner: BannerSlide; banners: BannerSlide[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(`/api/admin/banners/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify(banner),
+    });
+  },
+
+  async reorderBanners(orderedIds: string[]): Promise<{ banners: BannerSlide[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/banners/reorder', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+  },
+
+  async deleteBanner(id: string): Promise<{ banners: BannerSlide[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(`/api/admin/banners/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  // --- Packages Management ---
+  async getAdminPackages(): Promise<{ packages: PackageDefinition[]; effectivePricing: EffectivePackagePricing }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/packages', {
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  async savePackage(pkg: Partial<PackageDefinition>): Promise<{ package: PackageDefinition; packages: PackageDefinition[]; effectivePricing: EffectivePackagePricing }> {
+    const adminKey = getStoredAdminKey();
+    const method = pkg.id ? 'PUT' : 'POST';
+    const url = pkg.id ? `/api/admin/packages/${encodeURIComponent(pkg.id)}` : '/api/admin/packages';
+    return safeFetchJson(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify(pkg),
+    });
+  },
+
+  async deletePackage(id: string): Promise<{ packages: PackageDefinition[] }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(`/api/admin/packages/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  // --- Offers Management ---
+  async getAdminOffers(): Promise<{ offers: OfferConfig[]; effectivePricing: EffectivePackagePricing }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/offers', {
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  async saveOffer(offer: Partial<OfferConfig>): Promise<{ offer: OfferConfig; offers: OfferConfig[]; effectivePricing: EffectivePackagePricing }> {
+    const adminKey = getStoredAdminKey();
+    const method = offer.id ? 'PUT' : 'POST';
+    const url = offer.id ? `/api/admin/offers/${encodeURIComponent(offer.id)}` : '/api/admin/offers';
+    return safeFetchJson(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify(offer),
+    });
+  },
+
+  async deleteOffer(id: string): Promise<{ offers: OfferConfig[]; effectivePricing: EffectivePackagePricing }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson(`/api/admin/offers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  // --- Website Settings Management ---
+  async getSiteSettings(): Promise<{ siteSettings: SiteSettings }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/site-settings', {
+      headers: { 'x-admin-key': adminKey || '' },
+    });
+  },
+
+  async updateSiteSettings(settings: Partial<SiteSettings>): Promise<{ siteSettings: SiteSettings }> {
+    const adminKey = getStoredAdminKey();
+    return safeFetchJson('/api/admin/site-settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminKey || '',
+      },
+      body: JSON.stringify(settings),
+    });
   },
 
   async createSemester(data: any): Promise<{ semester: Semester }> {
